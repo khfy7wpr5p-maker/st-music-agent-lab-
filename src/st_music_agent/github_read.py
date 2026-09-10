@@ -276,30 +276,30 @@ class GitHubReadToolset:
         path = arguments.get("path")
         ref = arguments.get("ref")
         if not isinstance(path, str):
-            raise ValueError("path must be a string")
+            raise TypeError("path must be a string")
         if ref is not None and not isinstance(ref, str):
-            raise ValueError("ref must be a string when provided")
+            raise TypeError("ref must be a string when provided")
         return self.client.read_file(path, ref)
 
     def _branch_info(self, arguments: Mapping[str, Any]) -> Mapping[str, Any]:
         self._require_keys(arguments, {"branch"})
         branch = arguments.get("branch")
         if not isinstance(branch, str):
-            raise ValueError("branch must be a string")
+            raise TypeError("branch must be a string")
         return self.client.branch_info(branch)
 
     def _pull_request(self, arguments: Mapping[str, Any]) -> Mapping[str, Any]:
         self._require_keys(arguments, {"number"})
         number = arguments.get("number")
         if not isinstance(number, int) or isinstance(number, bool):
-            raise ValueError("number must be an integer")
+            raise TypeError("number must be an integer")
         return self.client.pull_request(number)
 
     def _workflow_runs(self, arguments: Mapping[str, Any]) -> Mapping[str, Any]:
         self._require_keys(arguments, {"head_sha"})
         head_sha = arguments.get("head_sha")
         if head_sha is not None and not isinstance(head_sha, str):
-            raise ValueError("head_sha must be a string when provided")
+            raise TypeError("head_sha must be a string when provided")
         return self.client.workflow_runs(head_sha)
 
     @staticmethod
