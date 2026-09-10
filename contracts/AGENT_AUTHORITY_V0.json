@@ -1,0 +1,98 @@
+{
+  "schema_version": "0.1.0",
+  "contract_type": "ST_MUSIC_AGENT_AUTHORITY",
+  "status": "architecture_baseline",
+  "default_authority": "READ_ONLY",
+  "framework": {
+    "openmanus_role": "replaceable_agent_adapter",
+    "is_authority_source": false,
+    "may_expand_own_capabilities": false
+  },
+  "run_states": [
+    "SUCCEEDED",
+    "NEEDS_REVIEW",
+    "BLOCKED",
+    "ABSTAINED"
+  ],
+  "capabilities": {
+    "READ_ONLY": [
+      "read_repository",
+      "inspect_architecture",
+      "inspect_pull_requests",
+      "inspect_ci",
+      "run_bounded_sandbox_tests",
+      "produce_reports"
+    ],
+    "BRANCH_WRITE": [
+      "create_non_default_task_branch",
+      "write_bounded_task_files",
+      "commit_to_task_branch",
+      "run_validators"
+    ],
+    "PR_WRITE": [
+      "open_pull_request",
+      "update_task_pull_request",
+      "perform_bounded_ci_repair_loop"
+    ]
+  },
+  "default_denials": [
+    "direct_default_branch_write",
+    "force_push",
+    "automatic_merge",
+    "ci_or_validator_weakening",
+    "production_deployment",
+    "production_credentials",
+    "secret_commit",
+    "private_or_student_data_access",
+    "teacher_approval_impersonation",
+    "publication_or_share_authorization",
+    "training_data_admission",
+    "model_promotion",
+    "historical_evidence_rewrite",
+    "unrestricted_cross_repository_write"
+  ],
+  "human_gate_required": [
+    "merge_to_default_branch",
+    "production_or_deployment_change",
+    "license_change",
+    "destructive_history_change",
+    "model_promotion",
+    "training_data_admission",
+    "teacher_approval",
+    "publication",
+    "private_user_data_enablement",
+    "cross_repository_write_scope_expansion"
+  ],
+  "validation": {
+    "agent_explanation_may_override_failed_validator": false,
+    "candidate_may_modify_benchmark_truth_to_pass": false,
+    "candidate_may_lower_acceptance_threshold_to_pass": false,
+    "required_classes": [
+      "tests",
+      "build_or_type_or_lint_when_applicable",
+      "schema_and_contract",
+      "forbidden_path_and_diff_risk",
+      "repository_owned_domain_validators",
+      "ci_required_checks"
+    ]
+  },
+  "github": {
+    "default_branch_write": false,
+    "force_push": false,
+    "automatic_merge": false,
+    "task_branch_required_for_mutation": true,
+    "cross_repo_write_requires_explicit_allowlist": true
+  },
+  "data": {
+    "commit_api_keys_or_tokens": false,
+    "commit_private_student_or_user_data": false,
+    "runtime_secrets_source": "environment_or_external_secret_store",
+    "agent_output_is_canonical_musical_truth": false
+  },
+  "self_improvement": {
+    "allowed_mode": "candidate_branch_plus_fixed_benchmark",
+    "automatic_self_merge": false,
+    "validator_or_benchmark_rewrite_by_candidate": false,
+    "safety_regression_allowed": false
+  }
+}
