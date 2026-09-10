@@ -288,14 +288,15 @@ class GitHubMutationClient:
         if (
             not _BRANCH.fullmatch(value)
             or lowered == "head"
-            or lowered.startswith("refs/")
-            or lowered.startswith("heads/")
+            or lowered.startswith(("refs/", "heads/"))
             or ".." in value
             or "//" in value
             or "@{" in value
-            or value.endswith("/")
-            or value.endswith(".")
-            or any(segment.startswith(".") or segment.endswith(".lock") for segment in segments)
+            or value.endswith(("/", "."))
+            or any(
+                segment.startswith(".") or segment.endswith(".lock")
+                for segment in segments
+            )
         ):
             raise ValueError("branch name is invalid")
         return value
