@@ -8,7 +8,7 @@
 - A3 — bounded sandbox executor: COMPLETE
 - A4 — GitHub read-only adapter: COMPLETE / PR #2 open
 - A5 — lab-only branch/commit/PR writer: COMPLETE / PR #3 open / fixture PR #4 green
-- A6 — independent validator registry: IMPLEMENTED / stacked CI pending
+- A6 — independent validator registry: COMPLETE / PR #5 green
 - A7+ — NOT STARTED
 
 No merge, production deployment, secret mutation, teacher approval, canonical music authority, or unrestricted cross-repository write authority is activated.
@@ -106,7 +106,7 @@ Exit evidence:
 
 ## A6 — Validator registry
 
-Status: IMPLEMENTED / CI validation pending.
+Status: COMPLETE.
 
 Implemented:
 - deterministic `ValidatorRegistry`;
@@ -121,10 +121,11 @@ Implemented:
 - machine-readable `VALIDATOR_REGISTRY_V0.json`;
 - explicit rule that agent explanation cannot override blocking validation failure.
 
-Exit criteria:
-- full Python 3.12 suite green on the A6 head;
-- blocking validator failure remains `REJECTED` even when agent metadata asks for success;
-- missing/unfinished required validation cannot become `VERIFIED`.
+Exit evidence:
+- full Python 3.12 foundation suite on PR #5: SUCCESS;
+- blocking validator failure remains `REJECTED` even when agent metadata requests an override;
+- missing required validator and required skipped evidence cannot become `VERIFIED`;
+- validator exceptions become `ERROR`, never success.
 
 ## A7 — Public ST domain adapters
 
