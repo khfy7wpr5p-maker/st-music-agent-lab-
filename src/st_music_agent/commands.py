@@ -33,7 +33,7 @@ class GuardedCommandRunner:
     process_execution_enabled: bool = False
 
     _READ_ONLY_GIT = frozenset({"diff", "log", "rev-parse", "show", "status"})
-    _FORBIDDEN_GIT_FLAGS = ("--ext-diff", "--output", "--textconv")
+    _FORBIDDEN_GIT_FLAGS = ("--ext-diff", "--no-index", "--output", "--textconv")
 
     def __post_init__(self) -> None:
         self.root = self.root.resolve()
@@ -50,7 +50,7 @@ class GuardedCommandRunner:
                 for arg in args[2:]
                 for forbidden in self._FORBIDDEN_GIT_FLAGS
             ):
-                raise UnsupportedCommandError("git command contains a side-effect-capable flag")
+                raise UnsupportedCommandError("git command contains a workspace-escape or side-effect flag")
             return RiskLevel.READ_ONLY
         if args and args[0] == "pytest":
             return RiskLevel.REVERSIBLE_WRITE
