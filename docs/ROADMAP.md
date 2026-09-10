@@ -1,8 +1,15 @@
 # ST Music Agent Lab — Roadmap
 
-## A0 — Architecture baseline
+## Current checkpoint
 
-Status: ACTIVE in `architecture/openmanus-agent-foundation-v0`.
+- A0 — architecture baseline: COMPLETE / PR #1 open
+- A1 — minimal Python foundation: COMPLETE
+- A2 — OpenManus adapter foundation: COMPLETE
+- A3 — bounded sandbox executor: COMPLETE
+- A4 — GitHub read-only adapter: COMPLETE on `a4/github-read-only-adapter`
+- A5+ — NOT STARTED / no write or merge authority activated
+
+## A0 — Architecture baseline
 
 Goals:
 - define the lab's purpose and non-goals;
@@ -16,53 +23,62 @@ Exit criteria:
 
 ## A1 — Minimal Python foundation
 
-Create a small ST-owned package before integrating OpenManus:
+Status: COMPLETE.
 
+Implemented:
 - `TaskSpec` schema;
 - capability enum and policy engine;
 - run state/result schema;
 - structured run ledger;
 - unit tests for allowed/denied actions;
-- no network side effects.
+- no network side effects in the core.
 
-Exit criteria: deterministic policy tests pass and direct default-branch mutation is impossible through the core API.
+Exit evidence: deterministic policy tests pass and direct default-branch mutation is impossible through the core API.
 
 ## A2 — OpenManus adapter
 
-Integrate OpenManus as an external/replaceable backend:
+Status: COMPLETE as a foundation boundary; raw upstream runtime remains intentionally disabled.
 
-- pin an exact tested upstream revision or package identity;
-- isolate provider configuration from ST policy;
-- translate ST `TaskSpec` into bounded agent input;
-- translate tool/action requests back through the ST policy gate;
-- do not expose unrestricted tools by default.
+Implemented:
+- exact upstream revision identity;
+- provider/framework configuration isolated from ST policy;
+- `TaskSpec` translated into bounded agent input;
+- proposed actions re-evaluated through the ST policy gate;
+- unrestricted upstream tools are not exposed by default.
 
-Exit criteria: agent can plan a local fixture task without bypassing the ST gate.
+Exit evidence: fixture planning cannot bypass the ST gate.
 
 ## A3 — Sandbox executor
 
-Add bounded command execution:
+Status: COMPLETE.
 
-- temporary workspace;
-- command allowlist / resource limits;
+Implemented:
+- temporary workspace boundary;
+- explicit command grants and fixed safe command prefixes;
 - stdout/stderr capture;
-- timeout and retry budget;
-- no secret echoing;
-- Python/Node test command support.
+- timeout and retry budgets;
+- sanitized environment and caller-provided secret redaction;
+- Python/Node test command support;
+- `shell=False` execution.
 
-Exit criteria: fixture repository tests can run and produce a deterministic ledger.
+Exit evidence: deterministic fixture tests pass and GitHub Actions validates the foundation on Python 3.12.
 
 ## A4 — GitHub read-only adapter
 
-Add repository inspection capabilities:
+Status: COMPLETE.
 
-- repo/branch/commit/file metadata;
-- PR/CI/status reads;
-- diff inspection;
-- required-check evidence;
-- no writes.
+Implemented:
+- repository/branch/commit/file metadata reads;
+- PR reads;
+- PR diff reads;
+- workflow-run/CI reads by exact head SHA;
+- deterministic evidence digests and locators;
+- deterministic failing-PR diagnostic summary;
+- concrete GitHub REST backend exposes GET only;
+- requests are repository-scoped and byte/time bounded;
+- no branch, commit, PR, merge, secret, deployment or mutation method exists on the adapter/backend.
 
-Exit criteria: agent can diagnose a prepared failing fixture PR and produce a cited root-cause report.
+Exit evidence: a prepared failing fixture PR is diagnosed as `FAILED`, its failing workflow is named, and the report carries exact read locators. All A4 tests are required to pass in CI.
 
 ## A5 — Lab-only branch/PR writer
 
