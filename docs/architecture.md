@@ -1,6 +1,6 @@
 # ST Music Agent Lab — Architecture Map
 
-Status: A1-A4 execution foundation
+Status: A1-A5 guarded execution foundation
 Date: 2026-09-11
 
 ## Purpose
@@ -60,34 +60,49 @@ privileges.
 
 A4 adds the first real runtime boundary without coupling ST to a provider SDK.
 
-### Provider execution
+- `providers/openai_compatible.py`: chat-completions provider adapter.
+- `execution.py`: task routing plus one provider-backed execution turn.
+- `cli.py`: first `st-music-agent` command-line entrypoint.
+- `credentials.py`: environment-variable credential boundary.
+- `transport.py`: HTTP/HTTPS-only JSON transport with sanitized errors.
+- `openhands.py`: public OpenHands Agent Server REST adapter.
 
-`providers/openai_compatible.py` implements the existing `ModelClient` contract against a
-standard chat-completions HTTP endpoint. This lets compatible hosted or self-hosted GLM, Qwen,
-Kimi and future models be configured without changing the orchestration core.
+The OpenHands adapter still starts reasoning-only conversations with no terminal/editor tools.
+This prevents the external runtime from bypassing ST policy.
 
-`execution.py` routes an `AgentTask` to a model profile and executes the configured client.
-`cli.py` exposes this path as `st-music-agent`.
+## A5 — Guarded workspace and process boundary
 
-### Credential boundary
+A5 creates the first ST-owned repository tool surface.
 
-`credentials.py` stores only environment-variable names in configuration. Secret values are
-resolved at the final adapter boundary and are not copied into task, router or policy state.
+### Confined file operations
 
-### Network boundary
+`workspace.py` resolves every file operation against a fixed repository root.
 
-`transport.py` is a dependency-free JSON transport. It permits only absolute HTTP/HTTPS URLs
-and does not include remote HTTP response bodies in exceptions.
+- absolute paths are rejected;
+- `..` traversal outside the root is rejected;
+- existing symlinks that resolve outside the root are rejected;
+- read operations are classified as read-only;
+- writes are reversible writes and inherit branch policy;
+- deletions are destructive and therefore require exact approval.
 
-### OpenHands boundary
+This gives future agents a file-edit route that is narrower than an unrestricted terminal.
 
-`openhands.py` talks to the public OpenHands Agent Server REST API using `/api/conversations`.
-The current A4 adapter intentionally starts conversations with no OpenHands terminal/editor
-tools. This prevents an external agent runtime from bypassing ST's deterministic A3 policy.
+### Process execution
 
-OpenHands documents `TerminalTool`, `FileEditorTool` and `TaskTrackerTool` for software-agent
-work. Those tools belong in A5 only after their side effects are constrained by sandbox and
-approval policy.
+`commands.py` deliberately separates command classification from OS isolation.
+
+The runner is disabled by default. A host must explicitly set `process_execution_enabled=True`
+only after placing the process inside an externally isolated workspace such as a disposable
+container or VM.
+
+When enabled, the initial allowlist is intentionally narrow:
+
+- selected Git inspection commands (`status`, `diff`, `log`, `show`, `rev-parse`);
+- `pytest` / `python -m pytest`;
+- `ruff check`.
+
+Git options capable of external diff execution or output-file side effects are rejected.
+Arbitrary shell commands and `python -c` are not accepted.
 
 ## Current flow
 
@@ -101,20 +116,26 @@ ModelRouter ---------> ModelProfile
 DirectAgentRunner -> ModelClient adapter -> HTTP provider
 
 External agent path:
-ST config -> OpenHands adapter -> OpenHands Agent Server -> reasoning-only conversation (A4)
+ST config -> OpenHands adapter -> OpenHands Agent Server -> reasoning-only conversation
 
-Tool path:
-ActionRequest -> AutonomyPolicy -> GuardedActionExecutor -> operation / gate / deny
+File tool path:
+relative path -> GuardedWorkspace -> ActionRequest -> AutonomyPolicy -> read/write/gate
+
+Command path:
+argv -> allowlist/classifier -> isolation gate -> ActionRequest -> AutonomyPolicy -> subprocess
 ```
 
-## A5 continuation
+## A6 continuation
 
-1. Add an isolated workspace/sandbox contract.
-2. Add explicitly classified terminal and file-edit operations.
-3. Enable OpenHands engineering tools only through the controlled execution boundary.
+1. Add a concrete disposable sandbox backend (container/remote workspace adapter).
+2. Bind command execution enablement to verified sandbox capability rather than a loose caller
+   convention.
+3. Add structured tool-call requests/results for model-driven agent loops.
 4. Add run journal, event capture and resumable state.
-5. Add GitHub-specific action metadata and PR/CI workflows.
-6. Add music-domain tools and structured evidence contracts.
+5. Add GitHub-specific read/write/PR/CI action adapters.
+6. Evaluate whether OpenHands terminal/editor tools can be safely delegated inside that sandbox
+   or whether ST-owned tools should remain the authoritative execution surface.
+7. Add music-domain tools and structured evidence contracts.
 
 ## Architectural invariants
 
@@ -124,5 +145,7 @@ ActionRequest -> AutonomyPolicy -> GuardedActionExecutor -> operation / gate / d
 4. Failure to find a compatible model fails closed.
 5. Credentials are resolved only at adapter boundaries.
 6. External agent frameworks cannot silently bypass ST action policy.
-7. Music-specific intelligence stays above generic execution infrastructure.
-8. Tests define routing, safety and adapter behavior before capabilities are widened.
+7. File operations cannot escape the configured repository root.
+8. OS process execution is disabled until an external isolation layer explicitly enables it.
+9. Music-specific intelligence stays above generic execution infrastructure.
+10. Tests define routing, safety and adapter behavior before capabilities are widened.

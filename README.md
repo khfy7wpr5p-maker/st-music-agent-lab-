@@ -5,7 +5,7 @@ agents across ST projects.
 
 ## Current stage
 
-A1-A4 execution foundation:
+A1-A5 guarded execution foundation:
 
 - **A1 — Core contracts:** task, model capability, provider and action-risk contracts.
 - **A2 — Model routing:** capability-driven selection across current open-model profiles.
@@ -13,6 +13,9 @@ A1-A4 execution foundation:
   credential-sensitive operations.
 - **A4 — Execution adapters:** OpenAI-compatible provider execution, OpenHands Agent Server
   boundary, environment credential resolution, guarded tool execution and a first CLI.
+- **A5 — Guarded workspace:** repository-confined file operations, traversal/symlink escape
+  protection, exact approvals and an allowlisted process runner that is disabled unless an
+  external isolated workspace explicitly enables it.
 
 ## Initial model strategy
 
@@ -30,9 +33,8 @@ OpenHands Software Agent SDK / Agent Server is the preferred external software-a
 substrate. OpenManus, mini-SWE-agent and Qwen-Agent/Qwen Code remain architectural references;
 ST-specific routing, policy and music behavior stay in this repository.
 
-A4 intentionally does **not** enable OpenHands terminal or file-editor tools yet. Those tools can
-change a repository and therefore belong behind the A5 sandbox and action-policy bridge instead
-of bypassing ST's deterministic safety boundary.
+OpenHands terminal/file-editor tools remain disabled until their execution can be placed inside
+an externally isolated workspace and routed through ST's deterministic action policy.
 
 ## Safety boundary
 
@@ -44,7 +46,11 @@ The model never decides its own privilege level. Action risk is evaluated before
   matching human approval;
 - secret/credential exposure is denied;
 - provider credentials are resolved from environment variables only at adapter boundaries;
-- the dependency-free HTTP transport accepts only absolute HTTP/HTTPS URLs.
+- the dependency-free HTTP transport accepts only absolute HTTP/HTTPS URLs;
+- workspace file paths are resolved against a fixed root and cannot traverse outside it;
+- destructive file deletion always requires approval;
+- subprocess execution is disabled by default and must be enabled by an external isolation layer;
+- even when enabled, only selected Git read operations plus pytest/Ruff validation are accepted.
 
 ## Development
 
