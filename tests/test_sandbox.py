@@ -18,10 +18,15 @@ def test_docker_image_requires_digest_pin() -> None:
         DockerSandboxConfig(image="example/st-music-agent:latest")
 
 
-def test_docker_backend_builds_hardened_ephemeral_run(tmp_path: Path) -> None:
+def test_docker_backend_builds_hardened_read_only_run(tmp_path: Path) -> None:
     backend = DockerSandboxBackend(DockerSandboxConfig(image=PINNED_IMAGE))
 
-    args = backend._build_run_args("st-music-agent-test", tmp_path.resolve(), ("pytest", "-q"))
+    args = backend._build_run_args(
+        "st-music-agent-test",
+        tmp_path.resolve(),
+        ("git", "status", "--short"),
+        workspace_writable=False,
+    )
 
     assert args[:5] == ("docker", "run", "--rm", "--name", "st-music-agent-test")
     assert args[5:7] == ("--network", "none")
@@ -29,9 +34,23 @@ def test_docker_backend_builds_hardened_ephemeral_run(tmp_path: Path) -> None:
     assert "--security-opt=no-new-privileges:true" in args
     assert "--read-only" in args
     assert "--tmpfs" in args
-    assert "--mount" in args
+    assert "--entrypoint=" in args
+    assert f"type=bind,source={tmp_path.resolve()},target=/workspace,readonly" in args
+    assert args[-4:] == (PINNED_IMAGE, "git", "status", "--short")
+
+
+def test_docker_backend_builds_writable_validation_mount(tmp_path: Path) -> None:
+    backend = DockerSandboxBackend(DockerSandboxConfig(image=PINNED_IMAGE))
+
+    args = backend._build_run_args(
+        "st-music-agent-test",
+        tmp_path.resolve(),
+        ("pytest", "-q"),
+        workspace_writable=True,
+    )
+
     assert f"type=bind,source={tmp_path.resolve()},target=/workspace" in args
-    assert args[-5:-3] == ("--workdir", "/workspace")
+    assert f"type=bind,source={tmp_path.resolve()},target=/workspace,readonly" not in args
     assert args[-3:] == (PINNED_IMAGE, "pytest", "-q")
 
 
@@ -48,7 +67,12 @@ def test_docker_backend_executes_without_shell_and_returns_result(
     monkeypatch.setattr("st_music_agent.sandbox.subprocess.run", fake_run)
     backend = DockerSandboxBackend(DockerSandboxConfig(image=PINNED_IMAGE))
 
-    result = backend.execute(("pytest", "-q"), tmp_path, 30.0)
+    result = backend.execute(
+        ("pytest", "-q"),
+        tmp_path,
+        30.0,
+        workspace_writable=True,
+    )
 
     assert result.returncode == 0
     assert result.stdout == "ok"
