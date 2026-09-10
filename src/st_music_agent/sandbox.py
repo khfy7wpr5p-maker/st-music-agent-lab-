@@ -29,6 +29,8 @@ class SandboxBackend(Protocol):
         argv: Sequence[str],
         workspace_root: Path,
         timeout_seconds: float,
+        *,
+        workspace_writable: bool,
     ) -> SandboxResult: ...
 
 
@@ -60,6 +62,8 @@ class DockerSandboxBackend:
         argv: Sequence[str],
         workspace_root: Path,
         timeout_seconds: float,
+        *,
+        workspace_writable: bool,
     ) -> SandboxResult:
         args = tuple(argv)
         if not args:
@@ -71,7 +75,12 @@ class DockerSandboxBackend:
             raise SandboxConfigurationError("workspace path contains unsupported mount characters")
 
         container_name = f"st-music-agent-{uuid.uuid4().hex[:12]}"
-        docker_args = self._build_run_args(container_name, root, args)
+        docker_args = self._build_run_args(
+            container_name,
+            root,
+            args,
+            workspace_writable=workspace_writable,
+        )
 
         try:
             completed = subprocess.run(
@@ -98,8 +107,11 @@ class DockerSandboxBackend:
         container_name: str,
         workspace_root: Path,
         argv: Sequence[str],
+        *,
+        workspace_writable: bool,
     ) -> tuple[str, ...]:
-        mount = f"type=bind,source={workspace_root},target=/workspace"
+        mount_mode = "" if workspace_writable else ",readonly"
+        mount = f"type=bind,source={workspace_root},target=/workspace{mount_mode}"
         return (
             self.docker_binary,
             "run",
@@ -123,6 +135,7 @@ class DockerSandboxBackend:
             mount,
             "--workdir",
             "/workspace",
+            "--entrypoint=",
             self.config.image,
             *argv,
         )
