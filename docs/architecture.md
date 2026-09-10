@@ -1,19 +1,19 @@
 # ST Music Agent Lab — Architecture Map
 
-Status: A1-A6 sandboxed execution foundation
+Status: A1-A7 guarded agent foundation
 Date: 2026-09-11
 
 ## Purpose
 
-ST Music Agent Lab is a model-agnostic engineering and music-intelligence agent layer.
-It coordinates models and tools around ST repositories while keeping autonomy observable,
+ST Music Agent Lab is a model-agnostic engineering and music-intelligence agent layer. It
+coordinates models and tools around ST repositories while keeping autonomy observable,
 reversible, capability-driven and isolated from the host.
 
 ## Design decision
 
 Do not fork a large agent framework into this repository. Keep the ST core small and stable,
 then attach model providers, OpenHands, GitHub and music-domain capabilities through adapters.
-External agent frameworks must not bypass ST-owned policy and sandbox boundaries.
+External agent frameworks must not bypass ST-owned policy, tool and sandbox boundaries.
 
 ## A1-A3 — Core, routing and policy
 
@@ -47,71 +47,125 @@ and `--no-index` are rejected.
 
 ## A6 — Disposable Docker sandbox
 
-A6 removes the loose `process_execution_enabled=True` convention. `GuardedCommandRunner` now
-requires a `SandboxBackend`; without one, process execution is disabled.
-
+`GuardedCommandRunner` requires a `SandboxBackend`; without one, process execution is disabled.
 `sandbox.py` provides the first concrete backend: `DockerSandboxBackend`.
 
 Default Docker security contract:
 
-- image references are pinned to an exact `sha256` digest;
-- container is ephemeral (`--rm`) and named so timeout cleanup can force-remove it;
-- networking is disabled;
-- all Linux capabilities are dropped;
-- `no-new-privileges` is enabled;
-- PID, CPU and memory limits are applied;
-- container root filesystem is read-only;
-- `/tmp` is a bounded `noexec,nosuid` tmpfs;
-- image `ENTRYPOINT` is cleared so the classified ST command is authoritative;
-- only the configured repository root is bind-mounted;
-- read-only Git inspection mounts the repository read-only;
-- validation operations receive a writable repository mount;
-- Docker resource strings and image references are validated against option-injection forms.
+- exact digest-pinned image reference;
+- ephemeral named container with timeout cleanup;
+- networking disabled;
+- all Linux capabilities dropped;
+- `no-new-privileges` enabled;
+- PID, CPU and memory limits;
+- read-only container root and bounded `noexec,nosuid` `/tmp`;
+- image `ENTRYPOINT` cleared;
+- only the configured repository root bind-mounted;
+- read-only Git inspection gets a read-only mount;
+- validation operations get a writable repository mount;
+- Docker resource and image strings validated against option-injection forms.
 
-This matches the architectural direction of OpenHands ephemeral Docker/Kubernetes workspaces,
-while keeping ST policy authoritative over which commands may reach the sandbox.
+## A7 — Structured tool calls, bounded output and run evidence
+
+A7 creates the boundary a model must cross before it can drive ST-owned tools.
+
+### Model-facing output
+
+`output.py` defines `OutputSanitizer` and `OutputPolicy`.
+
+- ANSI control sequences are stripped;
+- configured sensitive values are replaced;
+- common bearer/API/token patterns are redacted;
+- sensitive mapping keys such as `api_key`, `token`, `password` and `secret` are redacted;
+- output streams are bounded before they are exposed to higher orchestration;
+- unsupported non-JSON-like values fail instead of being converted with `repr`.
+
+`GuardedCommandRunner` now sanitizes the `SandboxResult` before returning its `ActionResult`.
+The sandbox transport still captures raw process output internally, so this is a model-facing
+and persistence boundary rather than a claim that raw bytes never exist in process memory.
+
+### Explicit tool registry
+
+`agent_tools.py` defines structured `ToolCallRequest`, `ToolCallResult`, `ToolCallStatus` and
+`ToolRegistry` contracts.
+
+- only explicitly registered ST-owned tool names execute;
+- unknown names are rejected;
+- duplicate registration is rejected;
+- handler output is sanitized before exposure;
+- handler exceptions return a sanitized error string without a traceback;
+- the dispatcher performs no dynamic imports, shell evaluation or arbitrary command fallback.
+
+Tool handlers remain responsible for using policy-aware primitives such as `GuardedWorkspace`
+and `GuardedCommandRunner`; registering a handler does not grant it additional privileges.
+
+### Tamper-evident run journal
+
+`journal.py` implements an append-only JSONL `RunJournal`.
+
+Each event contains a sequence number, run ID, UTC timestamp, sanitized payload, previous event
+hash and SHA-256 event hash. Existing journals are verified before resuming; altered payloads,
+broken hash links, non-contiguous sequences or mismatched run IDs fail closed.
+
+The journal uses a process-local lock plus flush/fsync. It is not advertised as a multi-process
+transaction log; a future storage backend can provide stronger distributed durability if needed.
 
 ## Current flow
 
 ```text
 AgentTask -> ModelRouter -> ModelClient -> provider
 
-ActionRequest -> AutonomyPolicy -> GuardedActionExecutor
+Model tool request
+       |
+       v
+ToolCallRequest -> ToolRegistry --unknown--> REJECTED
+       | registered
+       v
+ST-owned handler -> ActionRequest -> AutonomyPolicy
+       |                              |
+       |                              +--> gate / deny
+       v
+GuardedWorkspace or GuardedCommandRunner
+       |
+       v
+SandboxBackend -> Docker isolation -> sanitized SandboxResult
+       |
+       v
+ToolCallResult -> model
 
-File operation:
-relative path -> GuardedWorkspace -> policy -> confined filesystem operation
-
-Command operation:
-argv -> command allowlist -> risk classification -> policy
-     -> SandboxBackend -> ephemeral Docker container -> repository mount
+Tool request/result -> sanitized RunJournal -> SHA-256 hash chain
 
 OpenHands:
 ST adapter -> Agent Server -> reasoning conversation
                  |
-                 +-- unrestricted Terminal/FileEditor tools remain disabled
+                 +-- raw Terminal/FileEditor tools remain disabled
 ```
 
-## A7 continuation
+## A8 continuation
 
-1. Add structured tool-call request/result contracts for a model-driven agent loop.
-2. Add an append-only run journal with resumable execution state.
-3. Add bounded/redacted command-output handling before exposing sandbox output to models.
-4. Add GitHub-specific adapters for repository inspection, branches, PRs and CI.
-5. Add an explicit OpenHands-to-ST tool bridge instead of enabling raw OpenHands terminal access.
-6. Add music-domain tools and evidence contracts for Score Restore, MusicXML/TAB, Score Editor
+1. Add GitHub-specific ST tool handlers for repository inspection, branch/PR status and CI.
+2. Add a bounded model-driven tool loop that parses provider tool requests into
+   `ToolCallRequest` and feeds structured results back to the model.
+3. Keep write/merge/destructive GitHub actions behind existing action-risk policy.
+4. Add explicit OpenHands-to-ST tool bridging rather than raw OpenHands terminal access.
+5. Add music-domain tools and evidence contracts for Score Restore, MusicXML/TAB, Score Editor
    and score-following repositories.
+6. Add run-level budgets for model turns, tool calls, output bytes and elapsed execution.
 
 ## Architectural invariants
 
 1. Model choice is replaceable.
 2. Models cannot grant themselves privileges.
 3. Tools declare risk before execution.
-4. Protected/destructive actions cannot silently escalate.
-5. Credentials are resolved only at adapter boundaries.
-6. File operations cannot escape the repository root.
-7. Host process execution is not an agent capability.
-8. Executable repository code runs only through an ST-approved sandbox backend.
-9. Read-only operations do not receive a writable repository mount.
-10. External agent frameworks cannot silently bypass ST policy or isolation.
-11. Music-specific intelligence remains above generic execution infrastructure.
-12. Tests define safety and adapter behavior before capabilities are widened.
+4. Unknown tool names do not execute.
+5. Protected/destructive actions cannot silently escalate.
+6. Credentials are resolved only at adapter boundaries.
+7. File operations cannot escape the repository root.
+8. Host process execution is not an agent capability.
+9. Executable repository code runs only through an ST-approved sandbox backend.
+10. Read-only operations do not receive a writable repository mount.
+11. Model-facing command output is bounded and redacted.
+12. Persistent run evidence is sanitized and hash chained.
+13. External agent frameworks cannot silently bypass ST policy or isolation.
+14. Music-specific intelligence remains above generic execution infrastructure.
+15. Tests define safety and adapter behavior before capabilities are widened.

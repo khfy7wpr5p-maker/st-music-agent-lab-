@@ -5,7 +5,7 @@ agents across ST projects.
 
 ## Current stage
 
-A1-A6 guarded execution foundation:
+A1-A7 guarded agent foundation:
 
 - **A1 — Core contracts:** task, model capability, provider and action-risk contracts.
 - **A2 — Model routing:** capability-driven selection across current open-model profiles.
@@ -15,9 +15,12 @@ A1-A6 guarded execution foundation:
   boundary, environment credential resolution, guarded tool execution and a first CLI.
 - **A5 — Guarded workspace:** repository-confined file operations plus a narrow command
   classifier.
-- **A6 — Disposable sandbox:** command execution requires a sandbox backend; the first concrete
-  backend uses an ephemeral Docker container with no network, dropped capabilities,
-  no-new-privileges, resource limits, a read-only container root and digest-pinned images.
+- **A6 — Disposable sandbox:** command execution requires a hardened sandbox backend; the first
+  concrete backend uses ephemeral Docker with no network, dropped capabilities and resource
+  limits.
+- **A7 — Tool-call and evidence boundary:** only registered ST tools can be dispatched; model-
+  facing output is redacted and bounded; tool requests/results can be written to a tamper-evident
+  append-only run journal.
 
 ## Initial model strategy
 
@@ -35,8 +38,9 @@ OpenHands Software Agent SDK / Agent Server is the preferred external software-a
 substrate. OpenManus, mini-SWE-agent and Qwen-Agent/Qwen Code remain architectural references;
 ST-specific routing, policy and music behavior stay in this repository.
 
-OpenHands terminal/file-editor tools remain disabled until their operations can be delegated
-through the ST-owned sandbox/policy boundary rather than obtaining unrestricted host access.
+Raw OpenHands terminal/file-editor tools remain disabled. Future external-agent tool requests
+must cross the ST-owned tool registry, action policy and sandbox boundary instead of receiving
+unrestricted host access.
 
 ## Safety boundary
 
@@ -52,11 +56,15 @@ The model never decides its own privilege level. Action risk is evaluated before
 - workspace paths cannot traverse or resolve through symlinks outside the repository root;
 - destructive file deletion always requires approval;
 - commands cannot execute without a configured sandbox backend;
-- Docker sandbox images are digest-pinned by default;
-- Docker sandbox networking is disabled and Linux capabilities are dropped;
-- the container root filesystem is read-only and `/tmp` is a bounded tmpfs;
+- Docker sandbox images are digest-pinned by default and networking is disabled;
 - Git inspection gets a read-only repository mount; validation commands get a writable mount;
-- arbitrary shell/Python commands remain outside the allowlist.
+- arbitrary shell/Python commands remain outside the allowlist;
+- command output is sanitized before it reaches model-facing orchestration;
+- tool names must be explicitly registered; unknown tool names are rejected;
+- journal payloads are sanitized before persistence and every event is linked by SHA-256 hash.
+
+Redaction is a defense-in-depth boundary, not a perfect data-loss-prevention system. Hosts should
+still avoid placing unnecessary secrets in agent-visible workspaces or tool arguments.
 
 ## Development
 

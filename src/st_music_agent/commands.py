@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .contracts import ActionRequest, RiskLevel
+from .output import OutputSanitizer
 from .sandbox import SandboxBackend, SandboxResult
 from .tools import ActionApproval, ActionResult, GuardedActionExecutor
 
@@ -26,6 +27,7 @@ class GuardedCommandRunner:
     branch: str
     backend: SandboxBackend | None = None
     executor: GuardedActionExecutor = field(default_factory=GuardedActionExecutor)
+    sanitizer: OutputSanitizer = field(default_factory=OutputSanitizer)
     timeout_seconds: float = 120.0
 
     _READ_ONLY_GIT = frozenset({"diff", "log", "rev-parse", "show", "status"})
@@ -81,11 +83,12 @@ class GuardedCommandRunner:
 
         def operation() -> SandboxResult:
             assert self.backend is not None
-            return self.backend.execute(
+            raw_result = self.backend.execute(
                 args,
                 self.root,
                 self.timeout_seconds,
                 workspace_writable=risk is not RiskLevel.READ_ONLY,
             )
+            return self.sanitizer.sanitize_result(raw_result)
 
         return self.executor.execute(action, operation, approval)
