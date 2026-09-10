@@ -13,9 +13,35 @@ from st_music_agent.sandbox import (
 PINNED_IMAGE = "example/st-music-agent@sha256:" + ("0" * 64)
 
 
-def test_docker_image_requires_digest_pin() -> None:
-    with pytest.raises(SandboxConfigurationError, match="sha256"):
-        DockerSandboxConfig(image="example/st-music-agent:latest")
+def test_docker_image_requires_exact_digest_pin() -> None:
+    for image in (
+        "example/st-music-agent:latest",
+        "--privileged@sha256:" + ("0" * 64),
+        "example/st-music-agent@sha256:short",
+    ):
+        with pytest.raises(SandboxConfigurationError):
+            DockerSandboxConfig(image=image)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    (
+        ("memory", "--privileged"),
+        ("memory", "0"),
+        ("cpus", "--network=host"),
+        ("cpus", "0"),
+        ("tmpfs_size", "64m,exec"),
+        ("pids_limit", 8),
+        ("pids_limit", 5000),
+    ),
+)
+def test_docker_resource_configuration_rejects_option_injection(
+    field: str,
+    value: object,
+) -> None:
+    kwargs: dict[str, object] = {"image": PINNED_IMAGE, field: value}
+    with pytest.raises(SandboxConfigurationError):
+        DockerSandboxConfig(**kwargs)
 
 
 def test_docker_backend_builds_hardened_read_only_run(tmp_path: Path) -> None:
