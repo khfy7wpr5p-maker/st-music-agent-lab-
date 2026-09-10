@@ -1,6 +1,6 @@
 # ST Music Agent Lab — Architecture Map
 
-Status: A1-A7 guarded agent foundation
+Status: A1-A8 guarded agent foundation
 Date: 2026-09-11
 
 ## Purpose
@@ -80,58 +80,107 @@ A7 creates the boundary a model must cross before it can drive ST-owned tools.
 - output streams are bounded before they are exposed to higher orchestration;
 - unsupported non-JSON-like values fail instead of being converted with `repr`.
 
-`GuardedCommandRunner` now sanitizes the `SandboxResult` before returning its `ActionResult`.
-The sandbox transport still captures raw process output internally, so this is a model-facing
-and persistence boundary rather than a claim that raw bytes never exist in process memory.
+`GuardedCommandRunner` sanitizes the `SandboxResult` before returning its `ActionResult`.
 
 ### Explicit tool registry
 
-`agent_tools.py` defines structured `ToolCallRequest`, `ToolCallResult`, `ToolCallStatus` and
-`ToolRegistry` contracts.
+`agent_tools.py` defines structured `ToolCallRequest`, `ToolCallResult`, `ToolCallStatus`,
+`ToolDefinition` and `ToolRegistry` contracts.
 
 - only explicitly registered ST-owned tool names execute;
 - unknown names are rejected;
 - duplicate registration is rejected;
 - handler output is sanitized before exposure;
 - handler exceptions return a sanitized error string without a traceback;
-- the dispatcher performs no dynamic imports, shell evaluation or arbitrary command fallback.
-
-Tool handlers remain responsible for using policy-aware primitives such as `GuardedWorkspace`
-and `GuardedCommandRunner`; registering a handler does not grant it additional privileges.
+- provider schemas describe allowed tools but do not grant privileges.
 
 ### Tamper-evident run journal
 
-`journal.py` implements an append-only JSONL `RunJournal`.
+`journal.py` implements an append-only JSONL `RunJournal` with sequence numbers, UTC timestamps,
+sanitized payloads and a SHA-256 previous-hash chain. Existing journals are verified before
+resume and fail closed on tampering or structural discontinuity.
 
-Each event contains a sequence number, run ID, UTC timestamp, sanitized payload, previous event
-hash and SHA-256 event hash. Existing journals are verified before resuming; altered payloads,
-broken hash links, non-contiguous sequences or mismatched run IDs fail closed.
+## A8 — Provider tool loop and read-only GitHub surface
 
-The journal uses a process-local lock plus flush/fsync. It is not advertised as a multi-process
-transaction log; a future storage backend can provide stronger distributed durability if needed.
+A8 adds a bounded provider-driven function-calling loop without widening action privilege.
+
+### Provider tool loop
+
+`providers/openai_compatible.py` can send OpenAI-compatible `tools` definitions and
+`tool_choice=auto`. `tool_loop.py` converts provider tool requests into the A7 registry.
+
+Safety and compatibility rules:
+
+- only provider messages with assistant role are accepted;
+- unknown provider message fields are not replayed into later turns;
+- tool calls are canonicalized to the function-call shape before replay;
+- optional `reasoning_content` may be preserved only in internal provider history for compatible
+  multi-turn servers, but it is stripped from public results and is not journaled;
+- duplicate tool-call IDs within a turn are rejected;
+- non-function tool calls are rejected;
+- tool-call IDs, tool names and argument payloads are size bounded;
+- malformed/non-object JSON arguments fail before dispatch;
+- turn and total tool-call budgets fail closed before partial execution of an overflowing batch;
+- the final public assistant message is projected to role/content and sanitized.
+
+The provider schema remains advisory. Host-side tool handlers independently validate arguments.
+
+### Read-only GitHub tools
+
+`github_read.py` exposes an explicit first GitHub toolset:
+
+- `github.repo_metadata`;
+- `github.read_file`;
+- `github.branch_info`;
+- `github.pull_request`;
+- `github.workflow_runs`.
+
+There are no model-callable GitHub write, branch creation, commit, PR mutation or merge tools in
+A8.
+
+GitHub read responses are projected to bounded fields. File reads are limited to UTF-8 text and
+bounded character counts. Common credential-sensitive paths such as `.env*`, `.npmrc`, `.pypirc`,
+private-key files and common cloud/SSH credential directories are rejected before network access.
+Base64 content is decoded strictly rather than best-effort. Tool handlers reject unexpected
+argument fields even if a provider ignores the advertised JSON schema.
 
 ## Current flow
 
 ```text
-AgentTask -> ModelRouter -> ModelClient -> provider
-
-Model tool request
-       |
-       v
-ToolCallRequest -> ToolRegistry --unknown--> REJECTED
-       | registered
-       v
-ST-owned handler -> ActionRequest -> AutonomyPolicy
-       |                              |
-       |                              +--> gate / deny
-       v
-GuardedWorkspace or GuardedCommandRunner
-       |
-       v
-SandboxBackend -> Docker isolation -> sanitized SandboxResult
-       |
-       v
-ToolCallResult -> model
+AgentTask -> ModelRouter -> OpenAICompatibleClient
+                          |
+                          v
+                   provider response
+                          |
+                          v
+             canonical assistant message
+                          |
+                    tool_calls?
+                     /       \
+                   no         yes
+                   |           |
+                   v           v
+          sanitized final   ToolCallRequest
+                              |
+                              v
+                         ToolRegistry
+                              |
+                    registered handler only
+                              |
+             +----------------+----------------+
+             |                                 |
+     GitHubReadToolset                 policy-aware ST tools
+      (read-only A8)                           |
+             |                         GuardedWorkspace /
+             |                         GuardedCommandRunner
+             |                                 |
+             +----------------+----------------+
+                              |
+                              v
+                        ToolCallResult
+                              |
+                              v
+                     provider next turn
 
 Tool request/result -> sanitized RunJournal -> SHA-256 hash chain
 
@@ -141,16 +190,16 @@ ST adapter -> Agent Server -> reasoning conversation
                  +-- raw Terminal/FileEditor tools remain disabled
 ```
 
-## A8 continuation
+## A9 continuation
 
-1. Add GitHub-specific ST tool handlers for repository inspection, branch/PR status and CI.
-2. Add a bounded model-driven tool loop that parses provider tool requests into
-   `ToolCallRequest` and feeds structured results back to the model.
-3. Keep write/merge/destructive GitHub actions behind existing action-risk policy.
-4. Add explicit OpenHands-to-ST tool bridging rather than raw OpenHands terminal access.
-5. Add music-domain tools and evidence contracts for Score Restore, MusicXML/TAB, Score Editor
+1. Add policy-aware GitHub mutation adapters for feature-branch commits and PR creation while
+   keeping protected-branch writes, merges and destructive actions human-gated.
+2. Add elapsed-time and aggregate model/output budget accounting at run level.
+3. Add explicit OpenHands-to-ST tool bridging rather than raw OpenHands terminal access.
+4. Add music-domain tools and evidence contracts for Score Restore, MusicXML/TAB, Score Editor
    and score-following repositories.
-6. Add run-level budgets for model turns, tool calls, output bytes and elapsed execution.
+5. Add integration tests against a disposable/local OpenAI-compatible server and a fake GitHub
+   API fixture before enabling broader production use.
 
 ## Architectural invariants
 
@@ -166,6 +215,9 @@ ST adapter -> Agent Server -> reasoning conversation
 10. Read-only operations do not receive a writable repository mount.
 11. Model-facing command output is bounded and redacted.
 12. Persistent run evidence is sanitized and hash chained.
-13. External agent frameworks cannot silently bypass ST policy or isolation.
-14. Music-specific intelligence remains above generic execution infrastructure.
-15. Tests define safety and adapter behavior before capabilities are widened.
+13. Provider schemas are not treated as host-side authorization.
+14. GitHub model tools are read-only until mutation tools are separately policy-wrapped.
+15. Credential-sensitive repository paths are denied before model-visible file reads.
+16. External agent frameworks cannot silently bypass ST policy or isolation.
+17. Music-specific intelligence remains above generic execution infrastructure.
+18. Tests define safety and adapter behavior before capabilities are widened.

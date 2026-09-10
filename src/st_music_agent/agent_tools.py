@@ -18,6 +18,23 @@ class ToolCallStatus(str, Enum):
 
 
 @dataclass(frozen=True, slots=True)
+class ToolDefinition:
+    name: str
+    description: str
+    parameters: Mapping[str, Any]
+
+    def as_openai_tool(self) -> dict[str, Any]:
+        return {
+            "type": "function",
+            "function": {
+                "name": self.name,
+                "description": self.description,
+                "parameters": dict(self.parameters),
+            },
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class ToolCallRequest:
     call_id: str
     tool_name: str
@@ -49,7 +66,7 @@ class ToolCallResult:
 
 
 class ToolRegistry:
-    """Explicit allowlist of ST-owned tool handlers."""
+    """Explicit allowlist of ST-owned tool handlers and provider schemas."""
 
     def __init__(
         self,
@@ -57,15 +74,25 @@ class ToolRegistry:
         journal: RunJournal | None = None,
     ) -> None:
         self._handlers: dict[str, ToolHandler] = {}
+        self._definitions: dict[str, ToolDefinition] = {}
         self._sanitizer = sanitizer or OutputSanitizer()
         self._journal = journal
 
-    def register(self, name: str, handler: ToolHandler) -> None:
+    def register(
+        self,
+        name: str,
+        handler: ToolHandler,
+        *,
+        description: str = "",
+        parameters: Mapping[str, Any] | None = None,
+    ) -> None:
         if not name.strip():
             raise ValueError("tool name must not be empty")
         if name in self._handlers:
             raise ValueError(f"tool is already registered: {name}")
+        schema = parameters or {"type": "object", "properties": {}}
         self._handlers[name] = handler
+        self._definitions[name] = ToolDefinition(name, description, schema)
 
     def dispatch(self, request: ToolCallRequest) -> ToolCallResult:
         self._record(
@@ -114,6 +141,12 @@ class ToolRegistry:
 
     def names(self) -> tuple[str, ...]:
         return tuple(sorted(self._handlers))
+
+    def provider_tools(self) -> tuple[dict[str, Any], ...]:
+        return tuple(
+            self._definitions[name].as_openai_tool()
+            for name in sorted(self._definitions)
+        )
 
     def _record(self, event_type: str, payload: Mapping[str, Any]) -> None:
         if self._journal is not None:

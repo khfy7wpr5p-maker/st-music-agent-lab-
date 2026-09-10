@@ -5,7 +5,7 @@ agents across ST projects.
 
 ## Current stage
 
-A1-A7 guarded agent foundation:
+A1-A8 guarded agent foundation:
 
 - **A1 — Core contracts:** task, model capability, provider and action-risk contracts.
 - **A2 — Model routing:** capability-driven selection across current open-model profiles.
@@ -21,6 +21,10 @@ A1-A7 guarded agent foundation:
 - **A7 — Tool-call and evidence boundary:** only registered ST tools can be dispatched; model-
   facing output is redacted and bounded; tool requests/results can be written to a tamper-evident
   append-only run journal.
+- **A8 — Provider tool loop + GitHub read surface:** OpenAI-compatible providers can issue
+  bounded function calls into an explicit ST registry. Provider messages are canonicalized,
+  reasoning state may be replayed internally without being exposed publicly, and the first
+  GitHub toolset is strictly read-only with credential-sensitive file paths denied.
 
 ## Initial model strategy
 
@@ -61,6 +65,9 @@ The model never decides its own privilege level. Action risk is evaluated before
 - arbitrary shell/Python commands remain outside the allowlist;
 - command output is sanitized before it reaches model-facing orchestration;
 - tool names must be explicitly registered; unknown tool names are rejected;
+- provider tool calls are bounded by turn, count and argument-size limits;
+- provider responses are replayed only through a canonical assistant/tool-call shape;
+- GitHub model tools are read-only in A8 and refuse common credential/key file paths;
 - journal payloads are sanitized before persistence and every event is linked by SHA-256 hash.
 
 Redaction is a defense-in-depth boundary, not a perfect data-loss-prevention system. Hosts should
