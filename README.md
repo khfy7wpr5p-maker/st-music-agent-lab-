@@ -5,7 +5,7 @@ agents across ST projects.
 
 ## Current stage
 
-A1-A9 guarded agent foundation:
+A1-A10 guarded agent foundation:
 
 - **A1 — Core contracts:** task, model capability, provider and action-risk contracts.
 - **A2 — Model routing:** capability-driven selection across current open-model profiles.
@@ -29,6 +29,10 @@ A1-A9 guarded agent foundation:
   write bounded non-sensitive files through deterministic policy. Protected-branch writes,
   deletion and pull-request creation remain human-gated; destructive/PR operations are not
   registered as model-callable tools, and merge is not exposed.
+- **A10 — Run budgets + host approval broker:** provider loops now enforce cumulative elapsed,
+  model-turn, tool-call and model-facing byte budgets. Human approvals are represented by opaque,
+  one-shot host tickets that must exactly match one action/target and cannot be generated through
+  the model tool registry.
 
 ## Initial model strategy
 
@@ -69,10 +73,14 @@ The model never decides its own privilege level. Action risk is evaluated before
 - arbitrary shell/Python commands remain outside the allowlist;
 - command and tool output is sanitized before model-facing exposure;
 - provider tool calls are bounded and replayed through a canonical message shape;
+- complete provider-loop traffic is cumulatively bounded by monotonic time, turn count, tool-call
+  count and serialized model-facing byte count;
 - GitHub read/write file paths reject common credential/key locations;
 - GitHub branch names reject protected-ref aliases and unsafe ref forms;
-- only feature-branch creation and file writing are model-callable GitHub mutations in A9;
+- only feature-branch creation and file writing are model-callable GitHub mutations;
 - deletion and PR creation remain host-side human-gated adapter operations; merge is absent;
+- host approval tickets are opaque, exact-action/target, one-shot and never registered as model
+  tools;
 - journal payloads are sanitized before persistence and every event is linked by SHA-256 hash.
 
 Redaction is defense in depth rather than a complete data-loss-prevention system. Hosts should
