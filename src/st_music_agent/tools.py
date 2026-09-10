@@ -41,9 +41,10 @@ class GuardedActionExecutor:
         if decision is AutonomyDecision.DENY:
             return ActionResult(decision=decision, executed=False)
 
-        if decision is AutonomyDecision.REQUIRE_HUMAN:
-            if approval is None or not approval.matches(action):
-                return ActionResult(decision=decision, executed=False)
+        if decision is AutonomyDecision.REQUIRE_HUMAN and (
+            approval is None or not approval.matches(action)
+        ):
+            return ActionResult(decision=decision, executed=False)
 
         value = operation()
         return ActionResult(decision=decision, executed=True, value=value)
