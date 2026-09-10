@@ -8,12 +8,14 @@ from st_music_agent.commands import (
     UnsupportedCommandError,
 )
 from st_music_agent.contracts import RiskLevel
+from st_music_agent.output import OutputPolicy, OutputSanitizer
 from st_music_agent.sandbox import SandboxResult
 
 
 class RecordingSandbox:
-    def __init__(self) -> None:
+    def __init__(self, result: SandboxResult | None = None) -> None:
         self.calls: list[tuple[tuple[str, ...], Path, float, bool]] = []
+        self.result = result or SandboxResult(returncode=0, stdout="passed", stderr="")
 
     def execute(
         self,
@@ -24,7 +26,7 @@ class RecordingSandbox:
         workspace_writable: bool,
     ) -> SandboxResult:
         self.calls.append((argv, workspace_root, timeout_seconds, workspace_writable))
-        return SandboxResult(returncode=0, stdout="passed", stderr="")
+        return self.result
 
 
 def test_process_execution_requires_sandbox_backend(tmp_path: Path) -> None:
@@ -93,3 +95,32 @@ def test_validation_command_gets_writable_workspace(tmp_path: Path) -> None:
     assert result.value.returncode == 0
     assert result.value.stdout == "passed"
     assert backend.calls == [(("pytest", "-q"), tmp_path.resolve(), 42.0, True)]
+
+
+def test_command_output_is_redacted_and_bounded_before_exposure(tmp_path: Path) -> None:
+    backend = RecordingSandbox(
+        SandboxResult(
+            returncode=1,
+            stdout="token=private-value\n" + ("x" * 1000),
+            stderr="Bearer abcdefghijklmnop",
+        )
+    )
+    sanitizer = OutputSanitizer(
+        policy=OutputPolicy(max_chars_per_stream=128, truncation_marker="...[CUT]"),
+        sensitive_values=("private-value",),
+    )
+    runner = GuardedCommandRunner(
+        root=tmp_path,
+        branch="feature/test",
+        backend=backend,
+        sanitizer=sanitizer,
+    )
+
+    result = runner.run(("pytest", "-q"))
+
+    assert result.executed is True
+    assert result.value.returncode == 1
+    assert "private-value" not in result.value.stdout
+    assert "abcdefghijklmnop" not in result.value.stderr
+    assert len(result.value.stdout) == 128
+    assert result.value.stdout.endswith("...[CUT]")
