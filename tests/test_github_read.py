@@ -3,8 +3,10 @@ from __future__ import annotations
 import base64
 from dataclasses import dataclass, field
 
+import pytest
+
 from st_music_agent.agent_tools import ToolCallRequest, ToolCallStatus, ToolRegistry
-from st_music_agent.github_read import GitHubReadClient, GitHubReadConfig, GitHubReadToolset
+from st_music_agent.github_read import GitHubReadClient, GitHubReadConfig, GitHubReadError, GitHubReadToolset
 from st_music_agent.transport import JsonRequest, JsonResponse
 
 
@@ -49,6 +51,45 @@ def test_read_file_decodes_utf8_and_bounds_raw_file_content() -> None:
     assert "Authorization" not in request.headers
 
 
+def test_read_file_rejects_sensitive_paths_before_network_access() -> None:
+    transport = QueueTransport([])
+    client = GitHubReadClient(GitHubReadConfig(repository="owner/repo"), transport)
+
+    for path in (
+        ".env",
+        ".env.production",
+        ".npmrc",
+        "credentials.json",
+        "certs/private.key",
+        ".ssh/id_ed25519",
+        ".aws/credentials",
+    ):
+        with pytest.raises(ValueError, match="credential-sensitive"):
+            client.read_file(path)
+
+    assert transport.requests == []
+
+
+def test_read_file_rejects_invalid_base64_instead_of_best_effort_decoding() -> None:
+    transport = QueueTransport(
+        [
+            JsonResponse(
+                status_code=200,
+                payload={
+                    "type": "file",
+                    "encoding": "base64",
+                    "content": "not!!base64",
+                    "sha": "abc1234",
+                },
+            )
+        ]
+    )
+    client = GitHubReadClient(GitHubReadConfig(repository="owner/repo"), transport)
+
+    with pytest.raises(GitHubReadError, match="base64"):
+        client.read_file("README.md")
+
+
 def test_toolset_registers_only_explicit_read_tools() -> None:
     transport = QueueTransport(
         [
@@ -83,6 +124,24 @@ def test_toolset_registers_only_explicit_read_tools() -> None:
     assert result.status is ToolCallStatus.SUCCESS
     assert result.output["default_branch"] == "main"
     assert all(tool["type"] == "function" for tool in registry.provider_tools())
+
+
+def test_tool_handlers_reject_provider_schema_bypass_fields() -> None:
+    registry = ToolRegistry()
+    GitHubReadToolset(
+        GitHubReadClient(GitHubReadConfig(repository="owner/repo"), QueueTransport([]))
+    ).register_into(registry)
+
+    result = registry.dispatch(
+        ToolCallRequest(
+            call_id="call-1",
+            tool_name="github.repo_metadata",
+            arguments={"unexpected": "value"},
+        )
+    )
+
+    assert result.status is ToolCallStatus.ERROR
+    assert "unsupported fields" in (result.error or "")
 
 
 def test_pull_request_projection_drops_unbounded_remote_fields() -> None:
