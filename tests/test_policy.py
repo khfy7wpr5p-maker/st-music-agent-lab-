@@ -5,7 +5,6 @@ from st_music_agent import (
     RiskLevel,
 )
 
-
 POLICY = AutonomyPolicy()
 
 
