@@ -6,7 +6,12 @@ from dataclasses import dataclass, field
 import pytest
 
 from st_music_agent.agent_tools import ToolCallRequest, ToolCallStatus, ToolRegistry
-from st_music_agent.github_read import GitHubReadClient, GitHubReadConfig, GitHubReadError, GitHubReadToolset
+from st_music_agent.github_read import (
+    GitHubReadClient,
+    GitHubReadConfig,
+    GitHubReadError,
+    GitHubReadToolset,
+)
 from st_music_agent.transport import JsonRequest, JsonResponse
 
 
