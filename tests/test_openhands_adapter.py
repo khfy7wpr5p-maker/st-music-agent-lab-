@@ -1,10 +1,16 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 import pytest
 
-from st_music_agent.openhands import OpenHandsAgentServerClient, OpenHandsConfig
+from st_music_agent.agent_tools import ToolRegistry
+from st_music_agent.openhands import (
+    OpenHandsAgentServerClient,
+    OpenHandsConfig,
+    OpenHandsSTBridgeConfig,
+)
 from st_music_agent.transport import JsonRequest, JsonResponse
 
 
@@ -58,6 +64,101 @@ def test_openhands_adapter_builds_current_conversation_contract(
             "content": [{"type": "text", "text": "inspect and repair the repository"}],
             "run": True,
         },
+    }
+
+
+def test_openhands_st_bridge_payload_exposes_only_registry_tools_and_safe_builtins(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("ST_BRIDGE_TOKEN", "bridge-secret")
+    transport = RecordingTransport(
+        [JsonResponse(status_code=201, payload={"id": "conversation-bridge"})]
+    )
+    client = OpenHandsAgentServerClient(
+        OpenHandsConfig(
+            base_url="http://127.0.0.1:8000",
+            agent_model="test-model",
+            working_dir="/workspace/repo",
+        ),
+        transport,
+    )
+    registry = ToolRegistry()
+    registry.register("github.repo_metadata", lambda arguments: {"ok": True})
+    registry.register("github.read_file", lambda arguments: {"content": "safe"})
+
+    conversation = client.start_st_bridged_conversation(
+        "inspect repository",
+        OpenHandsSTBridgeConfig(
+            url="https://bridge.example/mcp",
+            bearer_token_env="ST_BRIDGE_TOKEN",
+        ),
+        registry,
+    )
+
+    assert conversation.conversation_id == "conversation-bridge"
+    agent = transport.requests[0].payload["agent"]
+    assert agent["tools"] == []
+    assert agent["include_default_tools"] == ["FinishTool", "ThinkTool"]
+    assert agent["mcp_config"] == {
+        "st_tools": {
+            "url": "https://bridge.example/mcp",
+            "transport": "streamable-http",
+            "timeout": 60.0,
+            "headers": {"Authorization": "Bearer bridge-secret"},
+        }
+    }
+    pattern = re.compile(agent["filter_tools_regex"])
+    assert pattern.fullmatch("finish")
+    assert pattern.fullmatch("think")
+    assert pattern.fullmatch("github.repo_metadata")
+    assert pattern.fullmatch("github.read_file")
+    assert not pattern.fullmatch("terminal")
+    assert not pattern.fullmatch("file_editor")
+    assert not pattern.fullmatch("bash")
+
+
+def test_openhands_st_bridge_rejects_empty_registry_before_network_access() -> None:
+    transport = RecordingTransport([])
+    client = OpenHandsAgentServerClient(
+        OpenHandsConfig(
+            base_url="http://127.0.0.1:8000",
+            agent_model="test-model",
+            working_dir="/workspace/repo",
+        ),
+        transport,
+    )
+
+    with pytest.raises(ValueError, match="at least one tool"):
+        client.start_st_bridged_conversation(
+            "inspect repository",
+            OpenHandsSTBridgeConfig(url="https://bridge.example/mcp"),
+            ToolRegistry(),
+        )
+
+    assert transport.requests == []
+
+
+@pytest.mark.parametrize(
+    "url",
+    (
+        "ftp://bridge.example/mcp",
+        "http://bridge.example/mcp",
+        "https://user:pass@bridge.example/mcp",
+        "https://bridge.example/mcp#fragment",
+    ),
+)
+def test_openhands_st_bridge_rejects_unsafe_endpoint_urls(url: str) -> None:
+    with pytest.raises(ValueError):
+        OpenHandsSTBridgeConfig(url=url)
+
+
+def test_openhands_st_bridge_allows_loopback_http_for_local_sidecars() -> None:
+    config = OpenHandsSTBridgeConfig(url="http://127.0.0.1:9000/mcp")
+
+    assert config.as_mcp_server() == {
+        "url": "http://127.0.0.1:9000/mcp",
+        "transport": "streamable-http",
+        "timeout": 60.0,
     }
 
 
