@@ -6,11 +6,11 @@ from .policy import AutonomyDecision, AutonomyPolicy
 from .router import ModelRouter
 
 __all__ = [
+    "DEFAULT_MODELS",
     "ActionRequest",
     "AgentTask",
     "AutonomyDecision",
     "AutonomyPolicy",
-    "DEFAULT_MODELS",
     "ModelProfile",
     "ModelRouter",
     "RiskLevel",
