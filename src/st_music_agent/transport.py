@@ -5,6 +5,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 
@@ -35,6 +36,10 @@ class UrllibJsonTransport:
     """Small dependency-free JSON HTTP transport for provider and agent adapters."""
 
     def request(self, request: JsonRequest) -> JsonResponse:
+        parsed = urlparse(request.url)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise TransportError("only absolute http/https remote service URLs are allowed")
+
         body = None
         headers = {"Accept": "application/json", **request.headers}
         if request.payload is not None:
@@ -53,10 +58,9 @@ class UrllibJsonTransport:
                 status_code = int(response.status)
                 raw_body = response.read().decode("utf-8")
         except HTTPError as exc:
-            detail = exc.read().decode("utf-8", errors="replace")
-            raise TransportError(f"HTTP {exc.code} from remote service: {detail[:500]}") from exc
+            raise TransportError(f"HTTP {exc.code} from remote service") from exc
         except URLError as exc:
-            raise TransportError(f"remote service connection failed: {exc.reason}") from exc
+            raise TransportError("remote service connection failed") from exc
 
         if not raw_body.strip():
             return JsonResponse(status_code=status_code, payload={})
