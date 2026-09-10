@@ -6,8 +6,11 @@
 - A1 — minimal Python foundation: COMPLETE
 - A2 — OpenManus adapter foundation: COMPLETE
 - A3 — bounded sandbox executor: COMPLETE
-- A4 — GitHub read-only adapter: COMPLETE on `a4/github-read-only-adapter`
-- A5+ — NOT STARTED / no write or merge authority activated
+- A4 — GitHub read-only adapter: COMPLETE / PR #2 open
+- A5 — lab-only branch/commit/PR writer: COMPLETE / PR #3 open / fixture PR #4 green
+- A6+ — NOT STARTED
+
+No merge, production deployment, secret mutation, or cross-repository write authority is activated.
 
 ## A0 — Architecture baseline
 
@@ -78,20 +81,38 @@ Implemented:
 - requests are repository-scoped and byte/time bounded;
 - no branch, commit, PR, merge, secret, deployment or mutation method exists on the adapter/backend.
 
-Exit evidence: a prepared failing fixture PR is diagnosed as `FAILED`, its failing workflow is named, and the report carries exact read locators. All A4 tests are required to pass in CI.
+Exit evidence: a prepared failing fixture PR is diagnosed as `FAILED`, its failing workflow is named, and the report carries exact read locators. A4 CI passed on Python 3.12.
 
 ## A5 — Lab-only branch/PR writer
 
-Allow controlled mutations only in this repository:
+Status: COMPLETE.
 
-- task branch creation;
-- bounded file updates;
-- commits;
-- PR creation;
-- CI repair loop with retry cap;
-- no merge authority.
+Implemented:
+- host-trusted lab-repository confinement;
+- `agent/` task branch prefix;
+- exact base-SHA branch creation;
+- bounded file creation/update through GitHub Contents API;
+- one commit receipt per file mutation;
+- expected blob SHA for safe existing-file updates;
+- pull-request creation to `TaskSpec.base_ref`;
+- bounded CI repair-attempt accounting;
+- machine-readable `LAB_WRITE_SCOPE_V0.json`;
+- no generic GitHub mutation surface.
 
-Exit criteria: agent completes one fixture change from task to green PR while preserving branch restrictions.
+Hard boundaries:
+- no `main` / `master` mutation;
+- no force-push/ref update;
+- no merge;
+- no PR PATCH;
+- no workflow rerun;
+- no secret/release/deployment mutation;
+- no cross-repository write.
+
+Exit evidence:
+- PR #3 A5 implementation `foundation/unit-tests`: SUCCESS on Python 3.12;
+- fixture branch `agent/a5-fixture-green-pr` changed one file under `fixtures/a5/`;
+- fixture PR #4 `foundation/unit-tests`: SUCCESS;
+- PR #3 and PR #4 remain open, mergeable, and unmerged.
 
 ## A6 — Validator registry
 
