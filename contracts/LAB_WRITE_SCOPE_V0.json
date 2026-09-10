@@ -1,0 +1,40 @@
+{
+  "schema_version": "0.1.0",
+  "contract_type": "ST_MUSIC_AGENT_LAB_WRITE_SCOPE",
+  "stage": "A5",
+  "trusted_repository": "khfy7wpr5p-maker/st-music-agent-lab-",
+  "task_branch_prefix": "agent/",
+  "allowed_mutation_routes": [
+    "POST /repos/{trusted_repository}/git/refs",
+    "PUT /repos/{trusted_repository}/contents/{bounded_path}",
+    "POST /repos/{trusted_repository}/pulls"
+  ],
+  "required_authority": {
+    "create_branch": "BRANCH_WRITE or PR_WRITE + CREATE_NON_DEFAULT_TASK_BRANCH",
+    "write_file_and_commit": "BRANCH_WRITE or PR_WRITE + WRITE_BOUNDED_TASK_FILES + COMMIT_TO_TASK_BRANCH",
+    "open_pull_request": "PR_WRITE + OPEN_PULL_REQUEST",
+    "ci_repair": "PR_WRITE + BOUNDED_CI_REPAIR + retry_budget"
+  },
+  "hard_denials": [
+    "default_branch_write",
+    "force_push",
+    "ref_update",
+    "merge",
+    "pull_request_patch",
+    "workflow_rerun",
+    "release",
+    "deployment",
+    "secret_write",
+    "repository_settings_write",
+    "cross_repository_write"
+  ],
+  "file_mutation": {
+    "max_utf8_bytes": 256000,
+    "existing_file_update_requires_expected_blob_sha": true,
+    "commit_message_max_chars": 160
+  },
+  "pull_request": {
+    "automatic_merge": false,
+    "human_merge_gate": true
+  }
+}

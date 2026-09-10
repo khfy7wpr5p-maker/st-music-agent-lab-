@@ -7,6 +7,12 @@ from .github_read import (
     GitHubRestReadBackend,
     PullRequestDiagnostic,
 )
+from .github_write import (
+    GitHubLabWriteAdapter,
+    GitHubMutationReceipt,
+    GitHubRestLabWriteBackend,
+    GitHubWriteError,
+)
 from .ledger import RunLedger
 from .models import Action, ActionRequest, AgentPlan, AuthorityMode, RunState, TaskSpec
 from .openmanus_adapter import OPENMANUS_PIN, OPENMANUS_REPOSITORY, OpenManusAdapter
@@ -19,9 +25,13 @@ __all__ = [
     "AgentPlan",
     "AuthorityMode",
     "GitHubEvidence",
+    "GitHubLabWriteAdapter",
+    "GitHubMutationReceipt",
     "GitHubReadAdapter",
     "GitHubReadError",
+    "GitHubRestLabWriteBackend",
     "GitHubRestReadBackend",
+    "GitHubWriteError",
     "OPENMANUS_PIN",
     "OPENMANUS_REPOSITORY",
     "OpenManusAdapter",
