@@ -8,6 +8,12 @@ from typing import Any, Protocol
 from .agent_tools import ToolCallRequest, ToolRegistry
 from .journal import RunJournal
 from .output import OutputSanitizer
+from .run_budget import (
+    RunBudgetExceeded,
+    RunBudgetPolicy,
+    RunBudgetSnapshot,
+    RunBudgetTracker,
+)
 
 
 class ToolCallProtocolError(RuntimeError):
@@ -33,6 +39,8 @@ class ToolLoopBudget:
     max_argument_chars: int = 32_768
     max_call_id_chars: int = 256
     max_tool_name_chars: int = 128
+    max_elapsed_seconds: float = 600.0
+    max_model_facing_bytes: int = 2_000_000
 
     def __post_init__(self) -> None:
         if self.max_turns < 1:
@@ -45,6 +53,18 @@ class ToolLoopBudget:
             raise ValueError("max_call_id_chars must be >= 8")
         if self.max_tool_name_chars < 8:
             raise ValueError("max_tool_name_chars must be >= 8")
+        if self.max_elapsed_seconds <= 0:
+            raise ValueError("max_elapsed_seconds must be positive")
+        if self.max_model_facing_bytes < 1024:
+            raise ValueError("max_model_facing_bytes must be >= 1024")
+
+    def run_policy(self) -> RunBudgetPolicy:
+        return RunBudgetPolicy(
+            max_elapsed_seconds=self.max_elapsed_seconds,
+            max_model_turns=self.max_turns,
+            max_tool_calls=self.max_tool_calls,
+            max_model_facing_bytes=self.max_model_facing_bytes,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,6 +72,7 @@ class ToolLoopResult:
     final_message: Mapping[str, Any]
     turns: int
     tool_calls: int
+    budget_snapshot: RunBudgetSnapshot | None = None
 
 
 @dataclass(slots=True)
@@ -69,10 +90,25 @@ class ToolLoopRunner:
         messages: list[Mapping[str, Any]] = [{"role": "user", "content": instruction}]
         tool_call_count = 0
         provider_tools = self.registry.provider_tools()
+        tracker = RunBudgetTracker(self.budget.run_policy())
 
         for turn in range(1, self.budget.max_turns + 1):
-            self._record("model_turn_started", {"turn": turn})
+            try:
+                tracker.consume_model_turn()
+                request_bytes = tracker.consume_model_payload(messages, provider_tools)
+            except RunBudgetExceeded as exc:
+                raise ToolLoopBudgetExceeded(str(exc)) from exc
+
+            self._record(
+                "model_turn_started",
+                {"turn": turn, "request_bytes": request_bytes},
+            )
             raw_message = self.client.complete_with_tools(messages, provider_tools)
+            try:
+                tracker.check_elapsed()
+            except RunBudgetExceeded as exc:
+                raise ToolLoopBudgetExceeded(str(exc)) from exc
+
             history_message = self._history_message(raw_message)
             tool_calls = self._parse_tool_calls(history_message)
             self._record(
@@ -86,21 +122,33 @@ class ToolLoopRunner:
 
             if not tool_calls:
                 final_message = self._public_message(history_message)
+                snapshot = tracker.snapshot()
                 self._record(
                     "agent_completed",
-                    {"turns": turn, "tool_calls": tool_call_count},
+                    {
+                        "turns": snapshot.model_turns,
+                        "tool_calls": snapshot.tool_calls,
+                        "model_facing_bytes": snapshot.model_facing_bytes,
+                    },
                 )
                 return ToolLoopResult(
                     final_message=final_message,
-                    turns=turn,
-                    tool_calls=tool_call_count,
+                    turns=snapshot.model_turns,
+                    tool_calls=snapshot.tool_calls,
+                    budget_snapshot=snapshot,
                 )
 
-            if tool_call_count + len(tool_calls) > self.budget.max_tool_calls:
-                raise ToolLoopBudgetExceeded("tool-call budget would be exceeded")
+            try:
+                tracker.consume_tool_calls(len(tool_calls))
+            except RunBudgetExceeded as exc:
+                raise ToolLoopBudgetExceeded(str(exc)) from exc
 
             messages.append(history_message)
             for request in tool_calls:
+                try:
+                    tracker.check_elapsed()
+                except RunBudgetExceeded as exc:
+                    raise ToolLoopBudgetExceeded(str(exc)) from exc
                 result = self.registry.dispatch(request)
                 tool_call_count += 1
                 messages.append(
