@@ -5,7 +5,7 @@ import json
 import os
 import threading
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -70,7 +70,7 @@ class RunJournal:
                 "sequence": sequence,
                 "run_id": self.run_id,
                 "event_type": event_type,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "payload": sanitized_payload,
                 "previous_hash": self._previous_hash,
             }
