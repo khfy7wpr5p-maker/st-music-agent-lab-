@@ -100,7 +100,7 @@ class ToolRegistry:
                 status=ToolCallStatus.SUCCESS,
                 output=sanitized_output,
             )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - boundary must contain handler failures
             result = ToolCallResult(
                 call_id=request.call_id,
                 tool_name=request.tool_name,
