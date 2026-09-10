@@ -65,7 +65,7 @@ def test_model_facing_byte_budget_is_cumulative() -> None:
     tracker = RunBudgetTracker(
         RunBudgetPolicy(max_model_facing_bytes=1024, max_model_turns=4, max_tool_calls=4)
     )
-    messages = [{"role": "user", "content": "x" * 420}]
+    messages = [{"role": "user", "content": "x" * 500}]
 
     first = tracker.consume_model_payload(messages, [])
     assert first < 1024
