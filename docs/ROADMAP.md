@@ -8,21 +8,16 @@
 - A3 — bounded sandbox executor: COMPLETE
 - A4 — GitHub read-only adapter: COMPLETE / PR #2 open
 - A5 — lab-only branch/commit/PR writer: COMPLETE / PR #3 open / fixture PR #4 green
-- A6+ — NOT STARTED
+- A6 — independent validator registry: IMPLEMENTED / stacked CI pending
+- A7+ — NOT STARTED
 
-No merge, production deployment, secret mutation, or cross-repository write authority is activated.
+No merge, production deployment, secret mutation, teacher approval, canonical music authority, or unrestricted cross-repository write authority is activated.
 
 ## A0 — Architecture baseline
 
-Goals:
-- define the lab's purpose and non-goals;
-- keep OpenManus replaceable behind an adapter;
-- define capability, validation, GitHub, and human-approval boundaries;
-- define safe future self-improvement rules.
+Status: COMPLETE.
 
-Exit criteria:
-- architecture, safety, roadmap, and machine-readable authority contract reviewed;
-- no production or cross-repository write authority activated.
+Defines the lab purpose, OpenManus replaceable-adapter boundary, capability/validation/GitHub/human-approval boundaries, and safe future self-improvement rules.
 
 ## A1 — Minimal Python foundation
 
@@ -72,16 +67,13 @@ Status: COMPLETE.
 
 Implemented:
 - repository/branch/commit/file metadata reads;
-- PR reads;
-- PR diff reads;
+- PR reads and diff reads;
 - workflow-run/CI reads by exact head SHA;
 - deterministic evidence digests and locators;
-- deterministic failing-PR diagnostic summary;
-- concrete GitHub REST backend exposes GET only;
-- requests are repository-scoped and byte/time bounded;
-- no branch, commit, PR, merge, secret, deployment or mutation method exists on the adapter/backend.
+- failing-PR diagnostic summary;
+- GET-only repository-scoped GitHub REST backend.
 
-Exit evidence: a prepared failing fixture PR is diagnosed as `FAILED`, its failing workflow is named, and the report carries exact read locators. A4 CI passed on Python 3.12.
+Exit evidence: prepared failing fixture PR is diagnosed as `FAILED`, failing workflow is named, and A4 CI passed on Python 3.12.
 
 ## A5 — Lab-only branch/PR writer
 
@@ -91,10 +83,9 @@ Implemented:
 - host-trusted lab-repository confinement;
 - `agent/` task branch prefix;
 - exact base-SHA branch creation;
-- bounded file creation/update through GitHub Contents API;
-- one commit receipt per file mutation;
+- bounded GitHub Contents API mutation;
 - expected blob SHA for safe existing-file updates;
-- pull-request creation to `TaskSpec.base_ref`;
+- PR creation to `TaskSpec.base_ref`;
 - bounded CI repair-attempt accounting;
 - machine-readable `LAB_WRITE_SCOPE_V0.json`;
 - no generic GitHub mutation surface.
@@ -110,27 +101,34 @@ Hard boundaries:
 
 Exit evidence:
 - PR #3 A5 implementation `foundation/unit-tests`: SUCCESS on Python 3.12;
-- fixture branch `agent/a5-fixture-green-pr` changed one file under `fixtures/a5/`;
-- fixture PR #4 `foundation/unit-tests`: SUCCESS;
-- PR #3 and PR #4 remain open, mergeable, and unmerged.
+- fixture PR #4 changed one allowed fixture file and passed CI;
+- PR #3 and PR #4 remain unmerged.
 
 ## A6 — Validator registry
 
-Standardize validation plugins:
+Status: IMPLEMENTED / CI validation pending.
 
-- tests/build/type/lint;
-- schema/contract checks;
-- immutable-source checks;
-- deterministic rerun checks;
-- forbidden-path/diff-risk checks;
-- CI status aggregation.
+Implemented:
+- deterministic `ValidatorRegistry`;
+- `ValidationContext`, `ValidatorResult`, `ValidationReport`;
+- states `VERIFIED`, `REJECTED`, `INCOMPLETE`;
+- statuses `PASS`, `FAIL`, `SKIP`, `ERROR`;
+- command/test evidence validator;
+- schema/contract validator;
+- forbidden-path/diff-risk validator;
+- deterministic rerun validator;
+- CI required-check validator;
+- machine-readable `VALIDATOR_REGISTRY_V0.json`;
+- explicit rule that agent explanation cannot override blocking validation failure.
 
-Exit criteria: an LLM explanation cannot override a failing validator.
+Exit criteria:
+- full Python 3.12 suite green on the A6 head;
+- blocking validator failure remains `REJECTED` even when agent metadata asks for success;
+- missing/unfinished required validation cannot become `VERIFIED`.
 
 ## A7 — Public ST domain adapters
 
 Add read/analysis adapters first for public specialist repositories such as:
-
 - ST Score Restore;
 - ST OMR Correction;
 - MusicXML to Guitar TAB;
@@ -145,7 +143,6 @@ Exit criteria: one cross-repository diagnostic task completes without mutating t
 ## A8 — Controlled cross-repository engineering
 
 Permit branch/PR work on an explicit allowlist:
-
 - one repository at a time;
 - exact base SHA;
 - bounded paths;
@@ -157,7 +154,6 @@ Exit criteria: at least two representative repositories complete green PR workfl
 ## A9 — Agent benchmark suite
 
 Create fixed tasks measuring:
-
 - task completion rate;
 - validator pass rate;
 - regression rate;
@@ -177,7 +173,6 @@ No automatic threshold lowering, benchmark rewriting, or self-merging.
 ## A11 — Product integration research
 
 Only after the lab is stable:
-
 - evaluate private/product adapters through local configuration;
 - define authenticated execution and tenancy boundaries;
 - define teacher/product authority handoff;
