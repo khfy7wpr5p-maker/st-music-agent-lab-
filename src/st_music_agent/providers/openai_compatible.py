@@ -25,11 +25,7 @@ class OpenAICompatibleConfig:
 
 
 class OpenAICompatibleClient:
-    """Provider-neutral chat-completions adapter.
-
-    This supports providers exposing an OpenAI-compatible endpoint while keeping
-    their SDKs and secrets outside the ST core contracts.
-    """
+    """Provider-neutral chat-completions adapter."""
 
     def __init__(
         self,
@@ -46,12 +42,35 @@ class OpenAICompatibleClient:
         return self._profile
 
     def complete(self, messages: Sequence[Mapping[str, Any]]) -> Mapping[str, Any]:
+        return self._complete(messages, tools=())
+
+    def complete_with_tools(
+        self,
+        messages: Sequence[Mapping[str, Any]],
+        tools: Sequence[Mapping[str, Any]],
+    ) -> Mapping[str, Any]:
+        return self._complete(messages, tools=tools)
+
+    def _complete(
+        self,
+        messages: Sequence[Mapping[str, Any]],
+        *,
+        tools: Sequence[Mapping[str, Any]],
+    ) -> Mapping[str, Any]:
         api_key = EnvCredential(self._config.api_key_env).resolve()
+        payload: dict[str, Any] = {
+            "model": self._config.model,
+            "messages": [dict(message) for message in messages],
+        }
+        if tools:
+            payload["tools"] = [dict(tool) for tool in tools]
+            payload["tool_choice"] = "auto"
+
         response = self._transport.request(
             JsonRequest(
                 method="POST",
                 url=self._config.endpoint(),
-                payload={"model": self._config.model, "messages": list(messages)},
+                payload=payload,
                 headers={"Authorization": f"Bearer {api_key}"},
                 timeout_seconds=self._config.timeout_seconds,
             )
