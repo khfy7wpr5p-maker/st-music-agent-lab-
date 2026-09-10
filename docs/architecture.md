@@ -1,151 +1,117 @@
 # ST Music Agent Lab — Architecture Map
 
-Status: A1-A5 guarded execution foundation
+Status: A1-A6 sandboxed execution foundation
 Date: 2026-09-11
 
 ## Purpose
 
 ST Music Agent Lab is a model-agnostic engineering and music-intelligence agent layer.
 It coordinates models and tools around ST repositories while keeping autonomy observable,
-reversible, and capability-driven.
-
-Initial target domains:
-
-- repository inspection, coding, tests, CI and documentation;
-- music-score and notation analysis;
-- research and architecture planning;
-- later adapters for ST Score Restore, Score Editor, MusicXML/TAB and score-following projects.
+reversible, capability-driven and isolated from the host.
 
 ## Design decision
 
 Do not fork a large agent framework into this repository. Keep the ST core small and stable,
 then attach model providers, OpenHands, GitHub and music-domain capabilities through adapters.
+External agent frameworks must not bypass ST-owned policy and sandbox boundaries.
 
-## A1 — Core contracts
+## A1-A3 — Core, routing and policy
 
-`contracts.py` defines stable boundaries for task intent, model capability, provider clients and
-action risk. Provider SDK details are not allowed to leak into these contracts.
+- `contracts.py`: stable task, model, provider and action-risk contracts.
+- `catalog.py` / `router.py`: capability-driven model selection.
+- `policy.py` / `tools.py`: deterministic execution gates independent from the LLM.
 
-## A2 — Capability-driven model routing
-
-`catalog.py` and `router.py` select models from declared task requirements.
-
-Initial routing intent:
-
-- GLM-5.1: primary long-horizon agentic engineering, planning, research and code;
-- Qwen3.8: open secondary model and longer-context fallback;
-- Kimi-K2.5: multimodal/score-image specialist and fallback agent model.
-
-The model names are configuration data rather than architectural dependencies.
-
-## A3 — Autonomous execution policy
-
-`policy.py` separates routine autonomous work from actions requiring human approval.
-`tools.py` applies that policy immediately before a tool operation executes.
-
-Default behavior:
-
-- read-only inspection: autonomous;
-- reversible writes on a feature branch: autonomous;
-- direct protected-branch writes: human approval;
-- destructive or external side-effect actions: human approval;
-- secret/credential exposure requests: denied;
-- a human approval must match the exact action name and target;
-- a denied secret action cannot be overridden by an approval.
-
-The policy is deterministic and independent from the LLM. A model cannot promote its own
-privileges.
+Initial model routing uses GLM-5.1 for primary agentic engineering, Qwen3.8 as a secondary
+long-context profile and Kimi-K2.5 for multimodal/score-image work.
 
 ## A4 — Execution adapters
 
-A4 adds the first real runtime boundary without coupling ST to a provider SDK.
-
-- `providers/openai_compatible.py`: chat-completions provider adapter.
-- `execution.py`: task routing plus one provider-backed execution turn.
-- `cli.py`: first `st-music-agent` command-line entrypoint.
-- `credentials.py`: environment-variable credential boundary.
+- `providers/openai_compatible.py`: provider-neutral chat-completions adapter.
+- `execution.py`: routed provider-backed execution.
+- `cli.py`: first command-line entrypoint.
+- `credentials.py`: secrets resolved only at adapter boundaries.
 - `transport.py`: HTTP/HTTPS-only JSON transport with sanitized errors.
 - `openhands.py`: public OpenHands Agent Server REST adapter.
 
-The OpenHands adapter still starts reasoning-only conversations with no terminal/editor tools.
-This prevents the external runtime from bypassing ST policy.
+OpenHands conversations still receive no unrestricted terminal/editor tools.
 
-## A5 — Guarded workspace and process boundary
+## A5 — Guarded workspace
 
-A5 creates the first ST-owned repository tool surface.
+`workspace.py` confines file reads/writes/deletions to a fixed repository root and rejects
+absolute paths, traversal and symlink escapes. Writes inherit branch policy and destructive
+file deletion requires an exact approval.
 
-### Confined file operations
+`commands.py` classifies a narrow set of Git inspection and pytest/Ruff validation commands.
+Arbitrary shell/Python commands and Git options such as `--ext-diff`, `--textconv`, `--output`
+and `--no-index` are rejected.
 
-`workspace.py` resolves every file operation against a fixed repository root.
+## A6 — Disposable Docker sandbox
 
-- absolute paths are rejected;
-- `..` traversal outside the root is rejected;
-- existing symlinks that resolve outside the root are rejected;
-- read operations are classified as read-only;
-- writes are reversible writes and inherit branch policy;
-- deletions are destructive and therefore require exact approval.
+A6 removes the loose `process_execution_enabled=True` convention. `GuardedCommandRunner` now
+requires a `SandboxBackend`; without one, process execution is disabled.
 
-This gives future agents a file-edit route that is narrower than an unrestricted terminal.
+`sandbox.py` provides the first concrete backend: `DockerSandboxBackend`.
 
-### Process execution
+Default Docker security contract:
 
-`commands.py` deliberately separates command classification from OS isolation.
+- image references are pinned to an exact `sha256` digest;
+- container is ephemeral (`--rm`) and named so timeout cleanup can force-remove it;
+- networking is disabled;
+- all Linux capabilities are dropped;
+- `no-new-privileges` is enabled;
+- PID, CPU and memory limits are applied;
+- container root filesystem is read-only;
+- `/tmp` is a bounded `noexec,nosuid` tmpfs;
+- image `ENTRYPOINT` is cleared so the classified ST command is authoritative;
+- only the configured repository root is bind-mounted;
+- read-only Git inspection mounts the repository read-only;
+- validation operations receive a writable repository mount;
+- Docker resource strings and image references are validated against option-injection forms.
 
-The runner is disabled by default. A host must explicitly set `process_execution_enabled=True`
-only after placing the process inside an externally isolated workspace such as a disposable
-container or VM.
-
-When enabled, the initial allowlist is intentionally narrow:
-
-- selected Git inspection commands (`status`, `diff`, `log`, `show`, `rev-parse`);
-- `pytest` / `python -m pytest`;
-- `ruff check`.
-
-Git options capable of external diff execution or output-file side effects are rejected.
-Arbitrary shell commands and `python -c` are not accepted.
+This matches the architectural direction of OpenHands ephemeral Docker/Kubernetes workspaces,
+while keeping ST policy authoritative over which commands may reach the sandbox.
 
 ## Current flow
 
 ```text
-AgentTask
-   |
-   v
-ModelRouter ---------> ModelProfile
-   |                       |
-   v                       v
-DirectAgentRunner -> ModelClient adapter -> HTTP provider
+AgentTask -> ModelRouter -> ModelClient -> provider
 
-External agent path:
-ST config -> OpenHands adapter -> OpenHands Agent Server -> reasoning-only conversation
+ActionRequest -> AutonomyPolicy -> GuardedActionExecutor
 
-File tool path:
-relative path -> GuardedWorkspace -> ActionRequest -> AutonomyPolicy -> read/write/gate
+File operation:
+relative path -> GuardedWorkspace -> policy -> confined filesystem operation
 
-Command path:
-argv -> allowlist/classifier -> isolation gate -> ActionRequest -> AutonomyPolicy -> subprocess
+Command operation:
+argv -> command allowlist -> risk classification -> policy
+     -> SandboxBackend -> ephemeral Docker container -> repository mount
+
+OpenHands:
+ST adapter -> Agent Server -> reasoning conversation
+                 |
+                 +-- unrestricted Terminal/FileEditor tools remain disabled
 ```
 
-## A6 continuation
+## A7 continuation
 
-1. Add a concrete disposable sandbox backend (container/remote workspace adapter).
-2. Bind command execution enablement to verified sandbox capability rather than a loose caller
-   convention.
-3. Add structured tool-call requests/results for model-driven agent loops.
-4. Add run journal, event capture and resumable state.
-5. Add GitHub-specific read/write/PR/CI action adapters.
-6. Evaluate whether OpenHands terminal/editor tools can be safely delegated inside that sandbox
-   or whether ST-owned tools should remain the authoritative execution surface.
-7. Add music-domain tools and structured evidence contracts.
+1. Add structured tool-call request/result contracts for a model-driven agent loop.
+2. Add an append-only run journal with resumable execution state.
+3. Add bounded/redacted command-output handling before exposing sandbox output to models.
+4. Add GitHub-specific adapters for repository inspection, branches, PRs and CI.
+5. Add an explicit OpenHands-to-ST tool bridge instead of enabling raw OpenHands terminal access.
+6. Add music-domain tools and evidence contracts for Score Restore, MusicXML/TAB, Score Editor
+   and score-following repositories.
 
 ## Architectural invariants
 
 1. Model choice is replaceable.
-2. Tools declare risk before execution.
-3. Protected/destructive actions cannot be silently escalated.
-4. Failure to find a compatible model fails closed.
+2. Models cannot grant themselves privileges.
+3. Tools declare risk before execution.
+4. Protected/destructive actions cannot silently escalate.
 5. Credentials are resolved only at adapter boundaries.
-6. External agent frameworks cannot silently bypass ST action policy.
-7. File operations cannot escape the configured repository root.
-8. OS process execution is disabled until an external isolation layer explicitly enables it.
-9. Music-specific intelligence stays above generic execution infrastructure.
-10. Tests define routing, safety and adapter behavior before capabilities are widened.
+6. File operations cannot escape the repository root.
+7. Host process execution is not an agent capability.
+8. Executable repository code runs only through an ST-approved sandbox backend.
+9. Read-only operations do not receive a writable repository mount.
+10. External agent frameworks cannot silently bypass ST policy or isolation.
+11. Music-specific intelligence remains above generic execution infrastructure.
+12. Tests define safety and adapter behavior before capabilities are widened.

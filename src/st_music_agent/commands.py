@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import subprocess
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from .contracts import ActionRequest, RiskLevel
+from .sandbox import SandboxBackend, SandboxResult
 from .tools import ActionApproval, ActionResult, GuardedActionExecutor
 
 
@@ -17,20 +17,16 @@ class ProcessExecutionDisabledError(RuntimeError):
     pass
 
 
-@dataclass(frozen=True, slots=True)
-class CommandResult:
-    returncode: int
-    stdout: str
-    stderr: str
+CommandResult = SandboxResult
 
 
 @dataclass(slots=True)
 class GuardedCommandRunner:
     root: Path
     branch: str
+    backend: SandboxBackend | None = None
     executor: GuardedActionExecutor = field(default_factory=GuardedActionExecutor)
     timeout_seconds: float = 120.0
-    process_execution_enabled: bool = False
 
     _READ_ONLY_GIT = frozenset({"diff", "log", "rev-parse", "show", "status"})
     _FORBIDDEN_GIT_FLAGS = ("--ext-diff", "--no-index", "--output", "--textconv")
@@ -50,7 +46,9 @@ class GuardedCommandRunner:
                 for arg in args[2:]
                 for forbidden in self._FORBIDDEN_GIT_FLAGS
             ):
-                raise UnsupportedCommandError("git command contains a workspace-escape or side-effect flag")
+                raise UnsupportedCommandError(
+                    "git command contains a workspace-escape or side-effect flag"
+                )
             return RiskLevel.READ_ONLY
         if args and args[0] == "pytest":
             return RiskLevel.REVERSIBLE_WRITE
@@ -68,9 +66,9 @@ class GuardedCommandRunner:
         args = tuple(argv)
         if not args:
             raise UnsupportedCommandError("command must not be empty")
-        if not self.process_execution_enabled:
+        if self.backend is None:
             raise ProcessExecutionDisabledError(
-                "process execution requires an externally isolated workspace"
+                "process execution requires a configured sandbox backend"
             )
 
         risk = self.classify(args)
@@ -81,19 +79,13 @@ class GuardedCommandRunner:
             metadata={"branch": self.branch},
         )
 
-        def operation() -> CommandResult:
-            completed = subprocess.run(
+        def operation() -> SandboxResult:
+            assert self.backend is not None
+            return self.backend.execute(
                 args,
-                cwd=self.root,
-                capture_output=True,
-                check=False,
-                text=True,
-                timeout=self.timeout_seconds,
-            )
-            return CommandResult(
-                returncode=completed.returncode,
-                stdout=completed.stdout,
-                stderr=completed.stderr,
+                self.root,
+                self.timeout_seconds,
+                workspace_writable=risk is not RiskLevel.READ_ONLY,
             )
 
         return self.executor.execute(action, operation, approval)

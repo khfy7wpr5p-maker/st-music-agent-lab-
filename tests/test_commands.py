@@ -1,4 +1,3 @@
-import subprocess
 from pathlib import Path
 
 import pytest
@@ -9,9 +8,26 @@ from st_music_agent.commands import (
     UnsupportedCommandError,
 )
 from st_music_agent.contracts import RiskLevel
+from st_music_agent.sandbox import SandboxResult
 
 
-def test_process_execution_is_disabled_by_default(tmp_path: Path) -> None:
+class RecordingSandbox:
+    def __init__(self) -> None:
+        self.calls: list[tuple[tuple[str, ...], Path, float, bool]] = []
+
+    def execute(
+        self,
+        argv: tuple[str, ...],
+        workspace_root: Path,
+        timeout_seconds: float,
+        *,
+        workspace_writable: bool,
+    ) -> SandboxResult:
+        self.calls.append((argv, workspace_root, timeout_seconds, workspace_writable))
+        return SandboxResult(returncode=0, stdout="passed", stderr="")
+
+
+def test_process_execution_requires_sandbox_backend(tmp_path: Path) -> None:
     runner = GuardedCommandRunner(root=tmp_path, branch="feature/test")
 
     with pytest.raises(ProcessExecutionDisabledError):
@@ -50,25 +66,25 @@ def test_classifier_rejects_arbitrary_shell_or_python(tmp_path: Path) -> None:
         runner.classify(("python", "-c", "print('unsafe')"))
 
 
-def test_enabled_isolated_runner_executes_without_shell(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    calls: list[tuple[str, ...]] = []
+def test_read_only_command_gets_read_only_workspace(tmp_path: Path) -> None:
+    backend = RecordingSandbox()
+    runner = GuardedCommandRunner(root=tmp_path, branch="feature/test", backend=backend)
 
-    def fake_run(args: tuple[str, ...], **kwargs: object) -> subprocess.CompletedProcess[str]:
-        calls.append(args)
-        assert kwargs["cwd"] == tmp_path.resolve()
-        assert kwargs["capture_output"] is True
-        assert kwargs["check"] is False
-        assert kwargs["text"] is True
-        return subprocess.CompletedProcess(args, 0, stdout="passed", stderr="")
+    result = runner.run(("git", "status", "--short"))
 
-    monkeypatch.setattr("st_music_agent.commands.subprocess.run", fake_run)
+    assert result.executed is True
+    assert backend.calls == [
+        (("git", "status", "--short"), tmp_path.resolve(), 120.0, False)
+    ]
+
+
+def test_validation_command_gets_writable_workspace(tmp_path: Path) -> None:
+    backend = RecordingSandbox()
     runner = GuardedCommandRunner(
         root=tmp_path,
         branch="feature/test",
-        process_execution_enabled=True,
+        backend=backend,
+        timeout_seconds=42.0,
     )
 
     result = runner.run(("pytest", "-q"))
@@ -76,4 +92,4 @@ def test_enabled_isolated_runner_executes_without_shell(
     assert result.executed is True
     assert result.value.returncode == 0
     assert result.value.stdout == "passed"
-    assert calls == [("pytest", "-q")]
+    assert backend.calls == [(("pytest", "-q"), tmp_path.resolve(), 42.0, True)]
