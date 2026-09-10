@@ -1,0 +1,13 @@
+{
+  "schema_version": "0.1.0",
+  "contract_type": "OPENMANUS_UPSTREAM_IDENTITY",
+  "repository": "FoundationAgents/OpenManus",
+  "revision": "3309bf4e416fb1c74b008f3e86494439a31bad53",
+  "observed_commit_date": "2026-08-16T10:29:11Z",
+  "observed_commit_message": "fix(deps): add missing structlog and cap pillow below 11",
+  "integration_mode": "replaceable_planning_adapter",
+  "live_runtime_enabled": false,
+  "reason_live_runtime_disabled": "The upstream Manus default tool collection includes executable Python and file editing. ST requires those actions to be mediated by the ST-owned PolicyEngine and bounded adapters before live activation.",
+  "authority_source": false,
+  "may_expand_own_capabilities": false
+}
