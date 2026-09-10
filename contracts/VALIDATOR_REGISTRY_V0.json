@@ -1,0 +1,45 @@
+{
+  "schema_version": "0.1.0",
+  "contract_type": "ST_VALIDATOR_REGISTRY",
+  "status": "A6",
+  "authority": {
+    "validator_result_overridable_by_agent_explanation": false,
+    "missing_required_validator_is_success": false,
+    "blocking_failure_is_success": false,
+    "blocking_validator_exception_is_success": false
+  },
+  "validation_states": [
+    "VERIFIED",
+    "REJECTED",
+    "INCOMPLETE"
+  ],
+  "validator_statuses": [
+    "PASS",
+    "FAIL",
+    "SKIP",
+    "ERROR"
+  ],
+  "required_classes": [
+    "tests",
+    "schema_and_contract",
+    "forbidden_path_and_diff_risk",
+    "deterministic_rerun",
+    "ci_required_checks"
+  ],
+  "evidence_rules": {
+    "validators_consume_structured_evidence": true,
+    "validator_order_is_deterministic": true,
+    "duplicate_validator_ids_allowed": false,
+    "required_skip_is_verified": false,
+    "required_error_is_verified": false,
+    "benchmark_truth_mutable_by_candidate": false,
+    "acceptance_threshold_mutable_by_candidate": false
+  },
+  "boundaries": {
+    "registry_grants_git_write_authority": false,
+    "registry_grants_merge_authority": false,
+    "registry_grants_deployment_authority": false,
+    "registry_grants_teacher_approval": false,
+    "registry_makes_agent_output_canonical_music_truth": false
+  }
+}
