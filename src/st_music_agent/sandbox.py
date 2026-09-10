@@ -1,11 +1,20 @@
 from __future__ import annotations
 
+import re
 import subprocess
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
+
+
+_IMAGE_REF = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/:@~-]*$")
+_PINNED_IMAGE_REF = re.compile(
+    r"^[A-Za-z0-9][A-Za-z0-9._/:~-]*@sha256:[0-9a-fA-F]{64}$"
+)
+_SIZE_VALUE = re.compile(r"^[1-9][0-9]*[bkmgBKMG]?$")
+_CPU_VALUE = re.compile(r"^[0-9]+(?:\.[0-9]+)?$")
 
 
 class SandboxConfigurationError(ValueError):
@@ -44,12 +53,18 @@ class DockerSandboxConfig:
     require_digest: bool = True
 
     def __post_init__(self) -> None:
-        if not self.image.strip():
-            raise SandboxConfigurationError("sandbox image must not be empty")
-        if self.require_digest and "@sha256:" not in self.image:
-            raise SandboxConfigurationError("sandbox image must be pinned by sha256 digest")
-        if self.pids_limit < 16:
-            raise SandboxConfigurationError("pids_limit must be >= 16")
+        if not _IMAGE_REF.fullmatch(self.image):
+            raise SandboxConfigurationError("sandbox image reference contains invalid characters")
+        if self.require_digest and not _PINNED_IMAGE_REF.fullmatch(self.image):
+            raise SandboxConfigurationError("sandbox image must be pinned by an exact sha256 digest")
+        if not _SIZE_VALUE.fullmatch(self.memory):
+            raise SandboxConfigurationError("memory must be a positive Docker size such as 512m or 1g")
+        if not _SIZE_VALUE.fullmatch(self.tmpfs_size):
+            raise SandboxConfigurationError("tmpfs_size must be a positive Docker size")
+        if not _CPU_VALUE.fullmatch(self.cpus) or float(self.cpus) <= 0:
+            raise SandboxConfigurationError("cpus must be a positive numeric value")
+        if not 16 <= self.pids_limit <= 4096:
+            raise SandboxConfigurationError("pids_limit must be between 16 and 4096")
 
 
 @dataclass(slots=True)
@@ -68,6 +83,8 @@ class DockerSandboxBackend:
         args = tuple(argv)
         if not args:
             raise SandboxConfigurationError("sandbox command must not be empty")
+        if timeout_seconds <= 0:
+            raise SandboxConfigurationError("timeout_seconds must be positive")
         root = workspace_root.resolve()
         if not root.is_dir():
             raise SandboxConfigurationError(f"workspace root is not a directory: {root}")
