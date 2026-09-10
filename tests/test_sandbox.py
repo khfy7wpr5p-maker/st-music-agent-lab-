@@ -1,5 +1,5 @@
-from pathlib import Path
 import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -24,15 +24,14 @@ def test_docker_backend_builds_hardened_ephemeral_run(tmp_path: Path) -> None:
     args = backend._build_run_args("st-music-agent-test", tmp_path.resolve(), ("pytest", "-q"))
 
     assert args[:5] == ("docker", "run", "--rm", "--name", "st-music-agent-test")
-    assert ("--network", "none") == args[5:7]
+    assert args[5:7] == ("--network", "none")
     assert "--cap-drop=ALL" in args
     assert "--security-opt=no-new-privileges:true" in args
     assert "--read-only" in args
     assert "--tmpfs" in args
     assert "--mount" in args
     assert f"type=bind,source={tmp_path.resolve()},target=/workspace" in args
-    assert ("--workdir", "/workspace") == args[-4:-2]
-    assert args[-2:] == (PINNED_IMAGE, "pytest") or args[-3:] == (PINNED_IMAGE, "pytest", "-q")
+    assert args[-5:-3] == ("--workdir", "/workspace")
     assert args[-3:] == (PINNED_IMAGE, "pytest", "-q")
 
 
