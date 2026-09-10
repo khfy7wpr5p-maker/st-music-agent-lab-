@@ -57,6 +57,51 @@ def test_adapter_injects_secret_only_at_transport_boundary(monkeypatch: pytest.M
     }
 
 
+def test_adapter_sends_openai_compatible_tool_schema(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ST_TEST_API_KEY", "secret-value")
+    assistant_message = {
+        "role": "assistant",
+        "content": None,
+        "reasoning_content": "internal provider reasoning",
+        "tool_calls": [
+            {
+                "id": "call-1",
+                "type": "function",
+                "function": {"name": "github.repo_metadata", "arguments": "{}"},
+            }
+        ],
+    }
+    transport = RecordingTransport(
+        JsonResponse(status_code=200, payload={"choices": [{"message": assistant_message}]})
+    )
+    client = OpenAICompatibleClient(
+        profile(),
+        OpenAICompatibleConfig(
+            base_url="https://example.invalid/v1",
+            model="provider-model-id",
+            api_key_env="ST_TEST_API_KEY",
+        ),
+        transport,
+    )
+    tools = (
+        {
+            "type": "function",
+            "function": {
+                "name": "github.repo_metadata",
+                "description": "Read repository metadata.",
+                "parameters": {"type": "object", "properties": {}},
+            },
+        },
+    )
+
+    message = client.complete_with_tools(({"role": "user", "content": "inspect"},), tools)
+
+    assert message == assistant_message
+    request = transport.requests[0]
+    assert request.payload["tools"] == list(tools)
+    assert request.payload["tool_choice"] == "auto"
+
+
 def test_adapter_fails_closed_when_credential_is_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("ST_MISSING_API_KEY", raising=False)
     client = OpenAICompatibleClient(
