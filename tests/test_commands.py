@@ -13,15 +13,17 @@ from st_music_agent.sandbox import SandboxResult
 
 class RecordingSandbox:
     def __init__(self) -> None:
-        self.calls: list[tuple[tuple[str, ...], Path, float]] = []
+        self.calls: list[tuple[tuple[str, ...], Path, float, bool]] = []
 
     def execute(
         self,
         argv: tuple[str, ...],
         workspace_root: Path,
         timeout_seconds: float,
+        *,
+        workspace_writable: bool,
     ) -> SandboxResult:
-        self.calls.append((argv, workspace_root, timeout_seconds))
+        self.calls.append((argv, workspace_root, timeout_seconds, workspace_writable))
         return SandboxResult(returncode=0, stdout="passed", stderr="")
 
 
@@ -64,7 +66,19 @@ def test_classifier_rejects_arbitrary_shell_or_python(tmp_path: Path) -> None:
         runner.classify(("python", "-c", "print('unsafe')"))
 
 
-def test_runner_delegates_execution_only_to_configured_sandbox(tmp_path: Path) -> None:
+def test_read_only_command_gets_read_only_workspace(tmp_path: Path) -> None:
+    backend = RecordingSandbox()
+    runner = GuardedCommandRunner(root=tmp_path, branch="feature/test", backend=backend)
+
+    result = runner.run(("git", "status", "--short"))
+
+    assert result.executed is True
+    assert backend.calls == [
+        (("git", "status", "--short"), tmp_path.resolve(), 120.0, False)
+    ]
+
+
+def test_validation_command_gets_writable_workspace(tmp_path: Path) -> None:
     backend = RecordingSandbox()
     runner = GuardedCommandRunner(
         root=tmp_path,
@@ -78,4 +92,4 @@ def test_runner_delegates_execution_only_to_configured_sandbox(tmp_path: Path) -
     assert result.executed is True
     assert result.value.returncode == 0
     assert result.value.stdout == "passed"
-    assert backend.calls == [(('pytest', '-q'), tmp_path.resolve(), 42.0)]
+    assert backend.calls == [(("pytest", "-q"), tmp_path.resolve(), 42.0, True)]
