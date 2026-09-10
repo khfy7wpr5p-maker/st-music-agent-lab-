@@ -2,11 +2,14 @@
 
 Implementation branch: `a5/lab-only-pr-writer`
 
-Validation state at authoring time: `PENDING_GITHUB_CI`.
+Validation state: `COMPLETE`.
 
-Required exit evidence:
+Exit evidence:
 
-- full Python unit suite passes on Python 3.12;
-- stacked A5 pull request remains mergeable;
-- no merge is performed by the agent;
-- A5 diff contains no cross-repository or production mutation authority.
+- PR #3 implementation workflow `foundation / unit-tests`: SUCCESS on Python 3.12;
+- fixture branch `agent/a5-fixture-green-pr` changed one bounded file under `fixtures/a5/`;
+- PR #4 fixture workflow `foundation / unit-tests`: SUCCESS on Python 3.12;
+- PR #3 and PR #4 are open, mergeable, and unmerged;
+- merge, default-branch write, production mutation, secret mutation, and cross-repository write remain disabled.
+
+No automatic merge was performed.
