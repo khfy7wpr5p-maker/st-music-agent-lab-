@@ -1,4 +1,8 @@
-from .openai_compatible import OpenAICompatibleClient, OpenAICompatibleConfig, ProviderResponseError
+from .openai_compatible import (
+    OpenAICompatibleClient,
+    OpenAICompatibleConfig,
+    ProviderResponseError,
+)
 
 __all__ = [
     "OpenAICompatibleClient",
