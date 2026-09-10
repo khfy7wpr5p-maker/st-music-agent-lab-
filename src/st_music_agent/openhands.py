@@ -7,6 +7,7 @@ from urllib.parse import urlsplit
 
 from .agent_tools import ToolRegistry
 from .credentials import EnvCredential
+from .openhands_bridge import STToolBridge
 from .transport import JsonRequest, JsonTransport, UrllibJsonTransport
 
 
@@ -87,9 +88,14 @@ class OpenHandsAgentServerClient:
         registry: ToolRegistry,
     ) -> OpenHandsConversation:
         """Start OpenHands with only ST-registry MCP tools plus safe finish/think built-ins."""
-        tool_names = registry.names()
+        manifest = STToolBridge(registry).list_tools()
+        tool_names = tuple(tool["name"] for tool in manifest)
         if not tool_names:
             raise ValueError("ST bridge registry must expose at least one tool")
+        reserved = {"finish", "think"}.intersection(tool_names)
+        if reserved:
+            raise ValueError("ST bridge registry collides with reserved OpenHands tools")
+
         allowed = ("finish", "think", *tool_names)
         filter_regex = "^(?:" + "|".join(re.escape(name) for name in allowed) + ")$"
         overrides = {
