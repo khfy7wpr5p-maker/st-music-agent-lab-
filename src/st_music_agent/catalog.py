@@ -1,0 +1,53 @@
+from . import contracts
+
+DEFAULT_MODELS: tuple[contracts.ModelProfile, ...] = (
+    contracts.ModelProfile(
+        name="GLM-5.1",
+        provider="zai",
+        task_kinds=frozenset(
+            {
+                contracts.TaskKind.CODE,
+                contracts.TaskKind.GENERAL,
+                contracts.TaskKind.PLANNING,
+                contracts.TaskKind.RESEARCH,
+            }
+        ),
+        context_window_tokens=200_000,
+        supports_tools=True,
+        supports_vision=False,
+        preference=110,
+    ),
+    contracts.ModelProfile(
+        name="Qwen3.8",
+        provider="qwen",
+        task_kinds=frozenset(
+            {
+                contracts.TaskKind.CODE,
+                contracts.TaskKind.GENERAL,
+                contracts.TaskKind.PLANNING,
+                contracts.TaskKind.RESEARCH,
+            }
+        ),
+        context_window_tokens=262_144,
+        supports_tools=True,
+        supports_vision=False,
+        preference=105,
+    ),
+    contracts.ModelProfile(
+        name="Kimi-K2.5",
+        provider="moonshot",
+        task_kinds=frozenset(
+            {
+                contracts.TaskKind.CODE,
+                contracts.TaskKind.GENERAL,
+                contracts.TaskKind.PLANNING,
+                contracts.TaskKind.RESEARCH,
+                contracts.TaskKind.SCORE_VISION,
+            }
+        ),
+        context_window_tokens=256_000,
+        supports_tools=True,
+        supports_vision=True,
+        preference=100,
+    ),
+)
