@@ -200,6 +200,8 @@ class GitHubMutationClient:
     ) -> ActionResult:
         head_branch = self._safe_branch(head)
         base_branch = self._safe_branch(base)
+        if not isinstance(title, str):
+            raise TypeError("pull request title must be a string")
         normalized_title = title.strip()
         if not normalized_title:
             raise ValueError("pull request title must not be empty")
@@ -281,14 +283,19 @@ class GitHubMutationClient:
     def _safe_branch(value: str) -> str:
         if not isinstance(value, str):
             raise TypeError("branch must be a string")
+        lowered = value.lower()
+        segments = value.split("/")
         if (
             not _BRANCH.fullmatch(value)
+            or lowered == "head"
+            or lowered.startswith("refs/")
+            or lowered.startswith("heads/")
             or ".." in value
             or "//" in value
             or "@{" in value
             or value.endswith("/")
             or value.endswith(".")
-            or value.endswith(".lock")
+            or any(segment.startswith(".") or segment.endswith(".lock") for segment in segments)
         ):
             raise ValueError("branch name is invalid")
         return value
@@ -298,14 +305,17 @@ class GitHubMutationClient:
         if not isinstance(path, str):
             raise TypeError("path must be a string")
         normalized = path.strip("/")
+        segments = normalized.split("/")
         if (
             not normalized
             or "\x00" in normalized
+            or "\\" in normalized
             or len(normalized) > 1024
-            or ".." in normalized.split("/")
+            or ".." in segments
+            or "" in segments
         ):
             raise ValueError("GitHub file path is invalid")
-        parts = tuple(part.lower() for part in normalized.split("/"))
+        parts = tuple(part.lower() for part in segments)
         basename = parts[-1]
         if any(part in _SENSITIVE_DIRECTORIES for part in parts[:-1]):
             raise ValueError("GitHub file path is credential-sensitive")
