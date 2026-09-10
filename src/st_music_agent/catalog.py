@@ -1,6 +1,5 @@
 from . import contracts
 
-
 DEFAULT_MODELS: tuple[contracts.ModelProfile, ...] = (
     contracts.ModelProfile(
         name="GLM-5.1",
