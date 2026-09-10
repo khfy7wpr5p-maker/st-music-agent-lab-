@@ -5,7 +5,7 @@ agents across ST projects.
 
 ## Current stage
 
-A1-A5 guarded execution foundation:
+A1-A6 guarded execution foundation:
 
 - **A1 — Core contracts:** task, model capability, provider and action-risk contracts.
 - **A2 — Model routing:** capability-driven selection across current open-model profiles.
@@ -13,9 +13,11 @@ A1-A5 guarded execution foundation:
   credential-sensitive operations.
 - **A4 — Execution adapters:** OpenAI-compatible provider execution, OpenHands Agent Server
   boundary, environment credential resolution, guarded tool execution and a first CLI.
-- **A5 — Guarded workspace:** repository-confined file operations, traversal/symlink escape
-  protection, exact approvals and an allowlisted process runner that is disabled unless an
-  external isolated workspace explicitly enables it.
+- **A5 — Guarded workspace:** repository-confined file operations plus a narrow command
+  classifier.
+- **A6 — Disposable sandbox:** command execution requires a sandbox backend; the first concrete
+  backend uses an ephemeral Docker container with no network, dropped capabilities,
+  no-new-privileges, resource limits, a read-only container root and digest-pinned images.
 
 ## Initial model strategy
 
@@ -33,8 +35,8 @@ OpenHands Software Agent SDK / Agent Server is the preferred external software-a
 substrate. OpenManus, mini-SWE-agent and Qwen-Agent/Qwen Code remain architectural references;
 ST-specific routing, policy and music behavior stay in this repository.
 
-OpenHands terminal/file-editor tools remain disabled until their execution can be placed inside
-an externally isolated workspace and routed through ST's deterministic action policy.
+OpenHands terminal/file-editor tools remain disabled until their operations can be delegated
+through the ST-owned sandbox/policy boundary rather than obtaining unrestricted host access.
 
 ## Safety boundary
 
@@ -46,11 +48,15 @@ The model never decides its own privilege level. Action risk is evaluated before
   matching human approval;
 - secret/credential exposure is denied;
 - provider credentials are resolved from environment variables only at adapter boundaries;
-- the dependency-free HTTP transport accepts only absolute HTTP/HTTPS URLs;
-- workspace file paths are resolved against a fixed root and cannot traverse outside it;
+- HTTP transport accepts only absolute HTTP/HTTPS URLs;
+- workspace paths cannot traverse or resolve through symlinks outside the repository root;
 - destructive file deletion always requires approval;
-- subprocess execution is disabled by default and must be enabled by an external isolation layer;
-- even when enabled, only selected Git read operations plus pytest/Ruff validation are accepted.
+- commands cannot execute without a configured sandbox backend;
+- Docker sandbox images are digest-pinned by default;
+- Docker sandbox networking is disabled and Linux capabilities are dropped;
+- the container root filesystem is read-only and `/tmp` is a bounded tmpfs;
+- Git inspection gets a read-only repository mount; validation commands get a writable mount;
+- arbitrary shell/Python commands remain outside the allowlist.
 
 ## Development
 
