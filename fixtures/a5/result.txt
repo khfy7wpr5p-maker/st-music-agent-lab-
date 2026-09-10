@@ -1,0 +1,4 @@
+A5 bounded lab-only writer fixture
+status=EXPECTED_GREEN
+branch_prefix=agent/
+merge_authority=disabled
