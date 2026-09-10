@@ -81,6 +81,11 @@ class GuardedCommandRunner:
 
         def operation() -> SandboxResult:
             assert self.backend is not None
-            return self.backend.execute(args, self.root, self.timeout_seconds)
+            return self.backend.execute(
+                args,
+                self.root,
+                self.timeout_seconds,
+                workspace_writable=risk is not RiskLevel.READ_ONLY,
+            )
 
         return self.executor.execute(action, operation, approval)
