@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import secrets
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -8,6 +9,8 @@ from typing import Any
 
 from .agent_tools import ToolCallRequest, ToolCallResult, ToolRegistry
 from .run_budget import RunBudgetExceeded, RunBudgetPolicy, RunBudgetSnapshot, RunBudgetTracker
+
+_MCP_TOOL_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
 
 
 class STBridgeProtocolError(RuntimeError):
@@ -62,8 +65,8 @@ class STBridgeCallResult:
 class STToolBridge:
     """Protocol-neutral bridge from MCP-style requests to the ST ToolRegistry.
 
-    The network/MCP server transport is intentionally host-owned. This core exposes only
-    registry definitions and dispatches only through the existing ST safety boundary.
+    Network/MCP transport is intentionally host-owned. This core exposes only registry
+    definitions and dispatches only through the existing ST safety boundary.
     """
 
     registry: ToolRegistry
@@ -82,14 +85,11 @@ class STToolBridge:
             name = function.get("name")
             description = function.get("description", "")
             parameters = function.get("parameters")
-            if not isinstance(name, str) or not name:
-                raise STBridgeProtocolError("registry tool name is invalid")
-            if len(name) > 128:
-                raise STBridgeProtocolError("registry tool name exceeds MCP compatibility limit")
+            self._validate_tool_name(name)
             if not isinstance(description, str):
                 raise STBridgeProtocolError("registry tool description must be text")
-            if not isinstance(parameters, Mapping):
-                raise STBridgeProtocolError("registry tool parameters must be an object schema")
+            if not isinstance(parameters, Mapping) or parameters.get("type") != "object":
+                raise STBridgeProtocolError("registry tool input schema must be an object schema")
             tools.append(
                 {
                     "name": name,
@@ -104,10 +104,7 @@ class STToolBridge:
         tool_name: str,
         arguments: Mapping[str, Any] | None = None,
     ) -> STBridgeCallResult:
-        if not isinstance(tool_name, str) or not tool_name:
-            raise STBridgeProtocolError("tool name must be non-empty text")
-        if len(tool_name) > 128:
-            raise STBridgeProtocolError("tool name exceeds MCP compatibility limit")
+        self._validate_tool_name(tool_name)
         if arguments is None:
             arguments = {}
         if not isinstance(arguments, Mapping):
@@ -142,5 +139,13 @@ class STToolBridge:
         return STBridgeCallResult(result=result, budget_snapshot=self._tracker.snapshot())
 
     def budget_snapshot(self) -> RunBudgetSnapshot:
-        self._tracker.check_elapsed()
+        try:
+            self._tracker.check_elapsed()
+        except RunBudgetExceeded as exc:
+            raise STBridgeProtocolError(str(exc)) from exc
         return self._tracker.snapshot()
+
+    @staticmethod
+    def _validate_tool_name(value: Any) -> None:
+        if not isinstance(value, str) or not _MCP_TOOL_NAME.fullmatch(value):
+            raise STBridgeProtocolError("tool name is not MCP-compatible")
