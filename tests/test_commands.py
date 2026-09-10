@@ -1,5 +1,5 @@
-from pathlib import Path
 import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -28,15 +28,17 @@ def test_classifier_allows_read_only_git_and_validation_commands(tmp_path: Path)
     assert runner.classify(("python", "-m", "pytest", "-q")) is RiskLevel.REVERSIBLE_WRITE
 
 
-def test_classifier_rejects_side_effect_capable_git_flags(tmp_path: Path) -> None:
+def test_classifier_rejects_side_effect_or_escape_git_flags(tmp_path: Path) -> None:
     runner = GuardedCommandRunner(root=tmp_path, branch="feature/test")
 
-    with pytest.raises(UnsupportedCommandError):
-        runner.classify(("git", "diff", "--output=/tmp/leak"))
-    with pytest.raises(UnsupportedCommandError):
-        runner.classify(("git", "diff", "--ext-diff"))
-    with pytest.raises(UnsupportedCommandError):
-        runner.classify(("git", "show", "--textconv"))
+    for command in (
+        ("git", "diff", "--output=/tmp/leak"),
+        ("git", "diff", "--ext-diff"),
+        ("git", "diff", "--no-index", "/etc/passwd", "README.md"),
+        ("git", "show", "--textconv"),
+    ):
+        with pytest.raises(UnsupportedCommandError):
+            runner.classify(command)
 
 
 def test_classifier_rejects_arbitrary_shell_or_python(tmp_path: Path) -> None:
