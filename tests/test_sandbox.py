@@ -9,7 +9,6 @@ from st_music_agent.sandbox import (
     SandboxConfigurationError,
 )
 
-
 PINNED_IMAGE = "example/st-music-agent@sha256:" + ("0" * 64)
 
 
