@@ -8,7 +8,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
-
 _IMAGE_REF = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/:@~-]*$")
 _PINNED_IMAGE_REF = re.compile(
     r"^[A-Za-z0-9][A-Za-z0-9._/:~-]*@sha256:[0-9a-fA-F]{64}$"
