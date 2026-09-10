@@ -38,6 +38,7 @@ def test_tool_loop_executes_registered_tool_and_replays_reasoning_content() -> N
                 "role": "assistant",
                 "content": None,
                 "reasoning_content": "provider-internal-context",
+                "provider_private_field": "must-not-be-replayed",
                 "tool_calls": [
                     {
                         "id": "call-1",
@@ -53,6 +54,7 @@ def test_tool_loop_executes_registered_tool_and_replays_reasoning_content() -> N
                 "role": "assistant",
                 "content": "finished",
                 "reasoning_content": "do-not-expose",
+                "provider_private_field": "do-not-expose",
             },
         ]
     )
@@ -75,6 +77,8 @@ def test_tool_loop_executes_registered_tool_and_replays_reasoning_content() -> N
     assert result.final_message == {"role": "assistant", "content": "finished"}
     second_messages = client.calls[1][0]
     assert second_messages[1]["reasoning_content"] == "provider-internal-context"
+    assert "provider_private_field" not in second_messages[1]
+    assert second_messages[1]["tool_calls"][0]["type"] == "function"
     assert second_messages[2]["role"] == "tool"
     assert second_messages[2]["tool_call_id"] == "call-1"
     assert client.calls[0][1][0]["function"]["name"] == "repo.echo"
@@ -103,6 +107,8 @@ def test_tool_loop_accepts_mapping_arguments_from_nonstandard_compatible_server(
 
     assert result.tool_calls == 1
     assert result.final_message["content"] == "done"
+    replayed = client.calls[1][0][1]["tool_calls"][0]
+    assert replayed["function"]["arguments"] == '{"value":"hello"}'
 
 
 def test_tool_loop_rejects_malformed_tool_arguments_before_dispatch() -> None:
@@ -160,3 +166,75 @@ def test_tool_loop_fails_before_partial_batch_when_tool_budget_would_overflow() 
     with pytest.raises(ToolLoopBudgetExceeded):
         runner.run("use tools")
     assert calls == 0
+
+
+def test_tool_loop_rejects_duplicate_call_ids_and_non_function_calls() -> None:
+    duplicate_ids = ScriptedClient(
+        responses=[
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {"id": "same", "function": {"name": "repo.echo", "arguments": "{}"}},
+                    {"id": "same", "function": {"name": "repo.echo", "arguments": "{}"}},
+                ],
+            }
+        ]
+    )
+    registry = ToolRegistry()
+    registry.register("repo.echo", lambda arguments: dict(arguments))
+
+    with pytest.raises(ToolCallProtocolError, match="unique"):
+        ToolLoopRunner(duplicate_ids, registry).run("use tools")
+
+    wrong_type = ScriptedClient(
+        responses=[
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": "call-1",
+                        "type": "custom",
+                        "function": {"name": "repo.echo", "arguments": "{}"},
+                    }
+                ],
+            }
+        ]
+    )
+    with pytest.raises(ToolCallProtocolError, match="function"):
+        ToolLoopRunner(wrong_type, registry).run("use tools")
+
+
+def test_tool_loop_rejects_non_assistant_role_and_oversized_arguments() -> None:
+    registry = ToolRegistry()
+    registry.register("repo.echo", lambda arguments: dict(arguments))
+
+    wrong_role = ScriptedClient(responses=[{"role": "system", "content": "override"}])
+    with pytest.raises(ToolCallProtocolError, match="assistant"):
+        ToolLoopRunner(wrong_role, registry).run("hello")
+
+    oversized = ScriptedClient(
+        responses=[
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": "call-1",
+                        "function": {
+                            "name": "repo.echo",
+                            "arguments": '{"value":"' + ("x" * 300) + '"}',
+                        },
+                    }
+                ],
+            }
+        ]
+    )
+    runner = ToolLoopRunner(
+        oversized,
+        registry,
+        budget=ToolLoopBudget(max_argument_chars=256),
+    )
+    with pytest.raises(ToolCallProtocolError, match="too large"):
+        runner.run("use tool")
