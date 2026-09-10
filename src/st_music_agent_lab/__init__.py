@@ -18,12 +18,29 @@ from .models import Action, ActionRequest, AgentPlan, AuthorityMode, RunState, T
 from .openmanus_adapter import OPENMANUS_PIN, OPENMANUS_REPOSITORY, OpenManusAdapter
 from .policy import PolicyEngine
 from .sandbox import SandboxResult, SandboxRunner
+from .validators import (
+    CIStatusValidator,
+    CommandEvidenceValidator,
+    DeterminismValidator,
+    ForbiddenPathValidator,
+    SchemaContractValidator,
+    ValidationContext,
+    ValidationReport,
+    ValidationState,
+    ValidatorRegistry,
+    ValidatorResult,
+    ValidatorStatus,
+)
 
 __all__ = [
     "Action",
     "ActionRequest",
     "AgentPlan",
     "AuthorityMode",
+    "CIStatusValidator",
+    "CommandEvidenceValidator",
+    "DeterminismValidator",
+    "ForbiddenPathValidator",
     "GitHubEvidence",
     "GitHubLabWriteAdapter",
     "GitHubMutationReceipt",
@@ -41,5 +58,12 @@ __all__ = [
     "RunState",
     "SandboxResult",
     "SandboxRunner",
+    "SchemaContractValidator",
     "TaskSpec",
+    "ValidationContext",
+    "ValidationReport",
+    "ValidationState",
+    "ValidatorRegistry",
+    "ValidatorResult",
+    "ValidatorStatus",
 ]
