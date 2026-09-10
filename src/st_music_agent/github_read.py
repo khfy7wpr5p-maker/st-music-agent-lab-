@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import binascii
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -13,6 +14,22 @@ from .transport import JsonRequest, JsonTransport, UrllibJsonTransport
 
 _REPOSITORY = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 _SHA = re.compile(r"^[0-9a-fA-F]{7,64}$")
+_SENSITIVE_BASENAMES = frozenset(
+    {
+        ".npmrc",
+        ".pypirc",
+        ".netrc",
+        "credentials",
+        "credentials.json",
+        "secrets.json",
+        "id_rsa",
+        "id_ed25519",
+        "id_ecdsa",
+        "id_dsa",
+    }
+)
+_SENSITIVE_DIRECTORIES = frozenset({".ssh", ".aws", ".azure", ".gcp"})
+_SENSITIVE_SUFFIXES = (".pem", ".key", ".p12", ".pfx")
 
 
 class GitHubReadError(RuntimeError):
@@ -67,9 +84,10 @@ class GitHubReadClient:
         if not isinstance(encoded, str):
             raise GitHubReadError("GitHub content response is missing file content")
         try:
-            decoded = base64.b64decode(encoded, validate=False).decode("utf-8")
-        except (ValueError, UnicodeDecodeError) as exc:
-            raise GitHubReadError("GitHub file is not valid UTF-8 text") from exc
+            compact = "".join(encoded.split())
+            decoded = base64.b64decode(compact, validate=True).decode("utf-8")
+        except (binascii.Error, ValueError, UnicodeDecodeError) as exc:
+            raise GitHubReadError("GitHub file is not valid base64 UTF-8 text") from exc
         limit = self.config.max_file_chars
         truncated = len(decoded) > limit
         return {
@@ -170,8 +188,19 @@ class GitHubReadClient:
     @staticmethod
     def _safe_path(path: str) -> str:
         normalized = path.strip("/")
-        if not normalized or ".." in normalized.split("/"):
+        if not normalized or "\x00" in normalized or ".." in normalized.split("/"):
             raise ValueError("GitHub file path is invalid")
+        parts = tuple(part.lower() for part in normalized.split("/"))
+        basename = parts[-1]
+        if any(part in _SENSITIVE_DIRECTORIES for part in parts[:-1]):
+            raise ValueError("GitHub file path is credential-sensitive")
+        if (
+            basename == ".env"
+            or basename.startswith(".env.")
+            or basename in _SENSITIVE_BASENAMES
+            or basename.endswith(_SENSITIVE_SUFFIXES)
+        ):
+            raise ValueError("GitHub file path is credential-sensitive")
         return normalized
 
     @staticmethod
@@ -188,13 +217,13 @@ class GitHubReadToolset:
     def register_into(self, registry: ToolRegistry) -> None:
         registry.register(
             "github.repo_metadata",
-            lambda arguments: self.client.repository_metadata(),
+            self._repo_metadata,
             description="Read basic metadata for the configured GitHub repository.",
         )
         registry.register(
             "github.read_file",
             self._read_file,
-            description="Read one UTF-8 text file from the configured GitHub repository.",
+            description="Read one non-sensitive UTF-8 text file from the configured repository.",
             parameters={
                 "type": "object",
                 "properties": {
@@ -238,7 +267,12 @@ class GitHubReadToolset:
             },
         )
 
+    def _repo_metadata(self, arguments: Mapping[str, Any]) -> Mapping[str, Any]:
+        self._require_keys(arguments, set())
+        return self.client.repository_metadata()
+
     def _read_file(self, arguments: Mapping[str, Any]) -> Mapping[str, Any]:
+        self._require_keys(arguments, {"path", "ref"})
         path = arguments.get("path")
         ref = arguments.get("ref")
         if not isinstance(path, str):
@@ -248,19 +282,28 @@ class GitHubReadToolset:
         return self.client.read_file(path, ref)
 
     def _branch_info(self, arguments: Mapping[str, Any]) -> Mapping[str, Any]:
+        self._require_keys(arguments, {"branch"})
         branch = arguments.get("branch")
         if not isinstance(branch, str):
             raise ValueError("branch must be a string")
         return self.client.branch_info(branch)
 
     def _pull_request(self, arguments: Mapping[str, Any]) -> Mapping[str, Any]:
+        self._require_keys(arguments, {"number"})
         number = arguments.get("number")
         if not isinstance(number, int) or isinstance(number, bool):
             raise ValueError("number must be an integer")
         return self.client.pull_request(number)
 
     def _workflow_runs(self, arguments: Mapping[str, Any]) -> Mapping[str, Any]:
+        self._require_keys(arguments, {"head_sha"})
         head_sha = arguments.get("head_sha")
         if head_sha is not None and not isinstance(head_sha, str):
             raise ValueError("head_sha must be a string when provided")
         return self.client.workflow_runs(head_sha)
+
+    @staticmethod
+    def _require_keys(arguments: Mapping[str, Any], allowed: set[str]) -> None:
+        extras = set(arguments) - allowed
+        if extras:
+            raise ValueError("tool arguments contain unsupported fields")
