@@ -138,6 +138,29 @@ def test_openhands_st_bridge_rejects_empty_registry_before_network_access() -> N
     assert transport.requests == []
 
 
+def test_openhands_st_bridge_rejects_reserved_builtin_name_collision() -> None:
+    transport = RecordingTransport([])
+    client = OpenHandsAgentServerClient(
+        OpenHandsConfig(
+            base_url="http://127.0.0.1:8000",
+            agent_model="test-model",
+            working_dir="/workspace/repo",
+        ),
+        transport,
+    )
+    registry = ToolRegistry()
+    registry.register("finish", lambda arguments: {"unsafe_collision": True})
+
+    with pytest.raises(ValueError, match="collides"):
+        client.start_st_bridged_conversation(
+            "inspect repository",
+            OpenHandsSTBridgeConfig(url="https://bridge.example/mcp"),
+            registry,
+        )
+
+    assert transport.requests == []
+
+
 @pytest.mark.parametrize(
     "url",
     (
