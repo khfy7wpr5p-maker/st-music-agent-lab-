@@ -1,5 +1,9 @@
-from st_music_agent.contracts import ActionRequest, RiskLevel
-from st_music_agent.policy import AutonomyDecision, AutonomyPolicy
+from st_music_agent import (
+    ActionRequest,
+    AutonomyDecision,
+    AutonomyPolicy,
+    RiskLevel,
+)
 
 
 POLICY = AutonomyPolicy()
