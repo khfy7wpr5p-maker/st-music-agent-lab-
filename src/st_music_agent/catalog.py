@@ -1,39 +1,49 @@
-from .contracts import ModelProfile, TaskKind
+from . import contracts
 
 
-DEFAULT_MODELS: tuple[ModelProfile, ...] = (
-    ModelProfile(
+DEFAULT_MODELS: tuple[contracts.ModelProfile, ...] = (
+    contracts.ModelProfile(
         name="GLM-5.1",
         provider="zai",
         task_kinds=frozenset(
-            {TaskKind.CODE, TaskKind.PLANNING, TaskKind.RESEARCH, TaskKind.GENERAL}
+            {
+                contracts.TaskKind.CODE,
+                contracts.TaskKind.GENERAL,
+                contracts.TaskKind.PLANNING,
+                contracts.TaskKind.RESEARCH,
+            }
         ),
         context_window_tokens=200_000,
         supports_tools=True,
         supports_vision=False,
         preference=110,
     ),
-    ModelProfile(
+    contracts.ModelProfile(
         name="Qwen3.8",
         provider="qwen",
         task_kinds=frozenset(
-            {TaskKind.CODE, TaskKind.PLANNING, TaskKind.RESEARCH, TaskKind.GENERAL}
+            {
+                contracts.TaskKind.CODE,
+                contracts.TaskKind.GENERAL,
+                contracts.TaskKind.PLANNING,
+                contracts.TaskKind.RESEARCH,
+            }
         ),
         context_window_tokens=262_144,
         supports_tools=True,
         supports_vision=False,
         preference=105,
     ),
-    ModelProfile(
+    contracts.ModelProfile(
         name="Kimi-K2.5",
         provider="moonshot",
         task_kinds=frozenset(
             {
-                TaskKind.CODE,
-                TaskKind.PLANNING,
-                TaskKind.SCORE_VISION,
-                TaskKind.RESEARCH,
-                TaskKind.GENERAL,
+                contracts.TaskKind.CODE,
+                contracts.TaskKind.GENERAL,
+                contracts.TaskKind.PLANNING,
+                contracts.TaskKind.RESEARCH,
+                contracts.TaskKind.SCORE_VISION,
             }
         ),
         context_window_tokens=256_000,
