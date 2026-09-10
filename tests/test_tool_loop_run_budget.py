@@ -82,7 +82,7 @@ def test_tool_loop_cumulative_payload_budget_counts_replayed_history() -> None:
     runner = ToolLoopRunner(
         client,
         registry,
-        budget=ToolLoopBudget(max_model_facing_bytes=1024),
+        budget=ToolLoopBudget(max_model_facing_bytes=4096),
     )
 
     result = runner.run("use echo")
@@ -90,4 +90,5 @@ def test_tool_loop_cumulative_payload_budget_counts_replayed_history() -> None:
     assert result.budget_snapshot is not None
     assert result.budget_snapshot.model_turns == 2
     assert result.budget_snapshot.tool_calls == 1
+    assert result.budget_snapshot.model_facing_bytes > 0
     assert len(client.calls) == 2
