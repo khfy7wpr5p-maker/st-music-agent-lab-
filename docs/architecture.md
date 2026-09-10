@@ -1,6 +1,6 @@
 # ST Music Agent Lab — Architecture Map
 
-Status: A1-A8 guarded agent foundation
+Status: A1-A9 guarded agent foundation
 Date: 2026-09-11
 
 ## Purpose
@@ -13,7 +13,7 @@ reversible, capability-driven and isolated from the host.
 
 Do not fork a large agent framework into this repository. Keep the ST core small and stable,
 then attach model providers, OpenHands, GitHub and music-domain capabilities through adapters.
-External agent frameworks must not bypass ST-owned policy, tool and sandbox boundaries.
+External frameworks must not bypass ST-owned policy, tool and sandbox boundaries.
 
 ## A1-A3 — Core, routing and policy
 
@@ -33,116 +33,94 @@ long-context profile and Kimi-K2.5 for multimodal/score-image work.
 - `transport.py`: HTTP/HTTPS-only JSON transport with sanitized errors.
 - `openhands.py`: public OpenHands Agent Server REST adapter.
 
-OpenHands conversations still receive no unrestricted terminal/editor tools.
+Raw OpenHands terminal/editor tools are not exposed.
 
 ## A5 — Guarded workspace
 
 `workspace.py` confines file reads/writes/deletions to a fixed repository root and rejects
 absolute paths, traversal and symlink escapes. Writes inherit branch policy and destructive
-file deletion requires an exact approval.
+file deletion requires exact approval.
 
-`commands.py` classifies a narrow set of Git inspection and pytest/Ruff validation commands.
-Arbitrary shell/Python commands and Git options such as `--ext-diff`, `--textconv`, `--output`
-and `--no-index` are rejected.
+`commands.py` accepts a narrow set of Git inspection and pytest/Ruff validation commands.
+Arbitrary shell/Python commands and Git escape/side-effect options are rejected.
 
 ## A6 — Disposable Docker sandbox
 
-`GuardedCommandRunner` requires a `SandboxBackend`; without one, process execution is disabled.
-`sandbox.py` provides the first concrete backend: `DockerSandboxBackend`.
+`GuardedCommandRunner` requires a `SandboxBackend`. `sandbox.py` provides a hardened
+`DockerSandboxBackend` with:
 
-Default Docker security contract:
-
-- exact digest-pinned image reference;
-- ephemeral named container with timeout cleanup;
+- exact digest-pinned images;
+- ephemeral named containers with timeout cleanup;
 - networking disabled;
-- all Linux capabilities dropped;
-- `no-new-privileges` enabled;
+- all Linux capabilities dropped and `no-new-privileges` enabled;
 - PID, CPU and memory limits;
-- read-only container root and bounded `noexec,nosuid` `/tmp`;
-- image `ENTRYPOINT` cleared;
-- only the configured repository root bind-mounted;
-- read-only Git inspection gets a read-only mount;
-- validation operations get a writable repository mount;
-- Docker resource and image strings validated against option-injection forms.
+- read-only container root plus bounded `noexec,nosuid` `/tmp`;
+- cleared image `ENTRYPOINT`;
+- only the configured repository bind-mounted;
+- read-only mounts for Git inspection and writable mounts only for approved validation work.
 
-## A7 — Structured tool calls, bounded output and run evidence
+## A7 — Structured tools, bounded output and evidence
 
-A7 creates the boundary a model must cross before it can drive ST-owned tools.
-
-### Model-facing output
-
-`output.py` defines `OutputSanitizer` and `OutputPolicy`.
-
-- ANSI control sequences are stripped;
-- configured sensitive values are replaced;
-- common bearer/API/token patterns are redacted;
-- sensitive mapping keys such as `api_key`, `token`, `password` and `secret` are redacted;
-- output streams are bounded before they are exposed to higher orchestration;
-- unsupported non-JSON-like values fail instead of being converted with `repr`.
-
-`GuardedCommandRunner` sanitizes the `SandboxResult` before returning its `ActionResult`.
-
-### Explicit tool registry
-
-`agent_tools.py` defines structured `ToolCallRequest`, `ToolCallResult`, `ToolCallStatus`,
-`ToolDefinition` and `ToolRegistry` contracts.
-
-- only explicitly registered ST-owned tool names execute;
-- unknown names are rejected;
-- duplicate registration is rejected;
-- handler output is sanitized before exposure;
-- handler exceptions return a sanitized error string without a traceback;
-- provider schemas describe allowed tools but do not grant privileges.
-
-### Tamper-evident run journal
-
-`journal.py` implements an append-only JSONL `RunJournal` with sequence numbers, UTC timestamps,
-sanitized payloads and a SHA-256 previous-hash chain. Existing journals are verified before
-resume and fail closed on tampering or structural discontinuity.
+`output.py` sanitizes and bounds model-facing output. `agent_tools.py` defines explicit tool
+requests/results and a registry: only registered ST-owned handlers execute. `journal.py`
+provides an append-only JSONL run journal with sanitized payloads and a SHA-256 previous-hash
+chain, detecting tampering before resume.
 
 ## A8 — Provider tool loop and read-only GitHub surface
 
-A8 adds a bounded provider-driven function-calling loop without widening action privilege.
+`providers/openai_compatible.py` can send OpenAI-compatible `tools` plus `tool_choice=auto`.
+`tool_loop.py` canonicalizes assistant function calls and maps them into the A7 registry.
 
-### Provider tool loop
+Key rules:
 
-`providers/openai_compatible.py` can send OpenAI-compatible `tools` definitions and
-`tool_choice=auto`. `tool_loop.py` converts provider tool requests into the A7 registry.
+- only assistant-role provider messages are accepted;
+- unknown provider fields are not replayed;
+- optional `reasoning_content` may be retained only in internal provider history and is removed
+  from public results/journal evidence;
+- duplicate IDs, non-function calls and malformed or oversized arguments fail closed;
+- model-turn and tool-call budgets prevent partial execution past a limit;
+- provider JSON schema is descriptive, not authorization; host handlers revalidate arguments.
 
-Safety and compatibility rules:
+`github_read.py` provides explicit read-only tools for repository metadata, bounded UTF-8 file
+reads, branch metadata, PR metadata and workflow-run status. Common credential/key paths are
+denied before network access and remote payloads are projected to bounded fields.
 
-- only provider messages with assistant role are accepted;
-- unknown provider message fields are not replayed into later turns;
-- tool calls are canonicalized to the function-call shape before replay;
-- optional `reasoning_content` may be preserved only in internal provider history for compatible
-  multi-turn servers, but it is stripped from public results and is not journaled;
-- duplicate tool-call IDs within a turn are rejected;
-- non-function tool calls are rejected;
-- tool-call IDs, tool names and argument payloads are size bounded;
-- malformed/non-object JSON arguments fail before dispatch;
-- turn and total tool-call budgets fail closed before partial execution of an overflowing batch;
-- the final public assistant message is projected to role/content and sanitized.
+## A9 — Policy-aware GitHub mutations
 
-The provider schema remains advisory. Host-side tool handlers independently validate arguments.
+`github_write.py` adds the first remote mutation layer, but does not turn GitHub into an
+unrestricted model capability.
 
-### Read-only GitHub tools
+### Model-callable mutation surface
 
-`github_read.py` exposes an explicit first GitHub toolset:
+Only these handlers may be registered into `ToolRegistry`:
 
-- `github.repo_metadata`;
-- `github.read_file`;
-- `github.branch_info`;
-- `github.pull_request`;
-- `github.workflow_runs`.
+- `github.create_branch` — create a new branch from an exact full commit SHA;
+- `github.write_file` — create/update one bounded non-sensitive UTF-8 file on a branch.
 
-There are no model-callable GitHub write, branch creation, commit, PR mutation or merge tools in
-A8.
+Both are classified as `REVERSIBLE_WRITE`. Feature-branch operations may auto-execute under the
+existing deterministic autonomy policy. A write targeting `main` or `master` is stopped before
+credential resolution or network access unless an exact host-side approval is supplied.
 
-GitHub read responses are projected to bounded fields. File reads are limited to UTF-8 text and
-bounded character counts. Common credential-sensitive paths such as `.env*`, `.npmrc`, `.pypirc`,
-private-key files and common cloud/SSH credential directories are rejected before network access.
-Base64 content is decoded strictly rather than best-effort. Tool handlers reject unexpected
-argument fields even if a provider ignores the advertised JSON schema.
+### Human-gated host operations
+
+`GitHubMutationClient` also implements, but the model toolset does not register:
+
+- `delete_file` — `DESTRUCTIVE`, therefore exact human approval required;
+- `open_pull_request` — `EXTERNAL_SIDE_EFFECT`, therefore exact human approval required.
+
+No GitHub merge operation is implemented or model-exposed in A9.
+
+### Mutation safety rules
+
+- GitHub token is resolved from an environment variable only inside an operation that policy has
+  already permitted;
+- full 40/64-character hexadecimal commit/blob IDs are required where relevant;
+- branch names reject `HEAD`, `refs/*`, `heads/*`, `..`, empty path segments, hidden segments and
+  `.lock`-style ref forms;
+- file paths reject traversal, backslashes, empty segments and common credential/key locations;
+- file content, commit messages and PR bodies are bounded;
+- remote responses are projected to minimal fields before returning to higher orchestration;
+- model arguments cannot carry or synthesize `ActionApproval`; approval remains host-side only.
 
 ## Current flow
 
@@ -150,74 +128,74 @@ argument fields even if a provider ignores the advertised JSON schema.
 AgentTask -> ModelRouter -> OpenAICompatibleClient
                           |
                           v
-                   provider response
+                  canonical tool calls
                           |
                           v
-             canonical assistant message
+                       ToolRegistry
                           |
-                    tool_calls?
-                     /       \
-                   no         yes
-                   |           |
-                   v           v
-          sanitized final   ToolCallRequest
-                              |
-                              v
-                         ToolRegistry
-                              |
-                    registered handler only
-                              |
-             +----------------+----------------+
-             |                                 |
-     GitHubReadToolset                 policy-aware ST tools
-      (read-only A8)                           |
-             |                         GuardedWorkspace /
-             |                         GuardedCommandRunner
-             |                                 |
-             +----------------+----------------+
-                              |
-                              v
-                        ToolCallResult
-                              |
-                              v
-                     provider next turn
+          +---------------+------------------+
+          |                                  |
+  GitHubReadToolset                 GitHubMutationToolset
+   read-only A8                    A9 model surface only
+          |                         |               |
+          |                  create branch     write file
+          |                         |               |
+          +---------------+---------+---------------+
+                          |
+                          v
+                    ActionRequest
+                          |
+                          v
+                    AutonomyPolicy
+                    /      |       \
+                 auto     gate      deny
+                  |        |
+                  v        +--> exact host approval only
+         GitHub / guarded local tools
+
+Host-only A9 paths:
+delete file -> DESTRUCTIVE -> approval gate
+open PR     -> EXTERNAL_SIDE_EFFECT -> approval gate
+merge       -> not implemented/exposed
+
+Executable local code -> GuardedCommandRunner -> SandboxBackend -> disposable Docker
 
 Tool request/result -> sanitized RunJournal -> SHA-256 hash chain
 
-OpenHands:
-ST adapter -> Agent Server -> reasoning conversation
-                 |
-                 +-- raw Terminal/FileEditor tools remain disabled
+OpenHands adapter -> Agent Server
+                    |
+                    +-- raw Terminal/FileEditor remain disabled
 ```
 
-## A9 continuation
+## A10 continuation
 
-1. Add policy-aware GitHub mutation adapters for feature-branch commits and PR creation while
-   keeping protected-branch writes, merges and destructive actions human-gated.
-2. Add elapsed-time and aggregate model/output budget accounting at run level.
-3. Add explicit OpenHands-to-ST tool bridging rather than raw OpenHands terminal access.
-4. Add music-domain tools and evidence contracts for Score Restore, MusicXML/TAB, Score Editor
-   and score-following repositories.
-5. Add integration tests against a disposable/local OpenAI-compatible server and a fake GitHub
-   API fixture before enabling broader production use.
+1. Add run-level elapsed-time, cumulative model-turn, tool-call and model-facing byte budgets.
+2. Add an explicit approval-broker contract so human-gated actions can pause/resume without
+   allowing model-generated approval artifacts.
+3. Add OpenHands-to-ST tool bridging that exposes only ST registry tools rather than raw terminal
+   or editor access.
+4. Add fake/local GitHub API integration fixtures to validate complete read/write policy flows.
+5. Begin music-domain tool/evidence contracts for Score Restore, MusicXML/TAB, Score Editor and
+   real-time score following.
 
 ## Architectural invariants
 
 1. Model choice is replaceable.
-2. Models cannot grant themselves privileges.
+2. Models cannot grant themselves privileges or approvals.
 3. Tools declare risk before execution.
 4. Unknown tool names do not execute.
-5. Protected/destructive actions cannot silently escalate.
-6. Credentials are resolved only at adapter boundaries.
-7. File operations cannot escape the repository root.
-8. Host process execution is not an agent capability.
+5. Protected/destructive/external actions cannot silently escalate.
+6. Credentials are resolved only at adapter boundaries after policy permits execution.
+7. File operations cannot escape configured repository/workspace boundaries.
+8. Host process execution is not a model capability.
 9. Executable repository code runs only through an ST-approved sandbox backend.
-10. Read-only operations do not receive a writable repository mount.
-11. Model-facing command output is bounded and redacted.
+10. Read-only operations do not receive a writable local repository mount.
+11. Model-facing output is bounded and redacted.
 12. Persistent run evidence is sanitized and hash chained.
-13. Provider schemas are not treated as host-side authorization.
-14. GitHub model tools are read-only until mutation tools are separately policy-wrapped.
-15. Credential-sensitive repository paths are denied before model-visible file reads.
-16. External agent frameworks cannot silently bypass ST policy or isolation.
-17. Music-specific intelligence remains above generic execution infrastructure.
-18. Tests define safety and adapter behavior before capabilities are widened.
+13. Provider schemas are not treated as host authorization.
+14. GitHub model mutations are limited to reversible feature-branch operations.
+15. Protected branch aliases and credential-sensitive paths fail closed before network access.
+16. Delete/PR/merge authority is never silently inherited by a model toolset.
+17. External agent frameworks cannot bypass ST policy or isolation.
+18. Music-specific intelligence remains above generic execution infrastructure.
+19. Tests define safety behavior before capability is widened.
