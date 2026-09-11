@@ -32,6 +32,8 @@ class OrchestrationStage(IntEnum):
     SHADOW_HEALTH_REVIEWED = 90
     CANONICAL_REVIEWED = 100
     CANONICALIZATION_RECORDED = 110
+    POST_CANONICAL_STABILITY_REVIEWED = 120
+    BASELINE_REGISTERED = 130
 
 
 _NEXT_STAGE = {
@@ -46,6 +48,10 @@ _NEXT_STAGE = {
     OrchestrationStage.ACTIVATION_RECORDED: OrchestrationStage.SHADOW_HEALTH_REVIEWED,
     OrchestrationStage.SHADOW_HEALTH_REVIEWED: OrchestrationStage.CANONICAL_REVIEWED,
     OrchestrationStage.CANONICAL_REVIEWED: OrchestrationStage.CANONICALIZATION_RECORDED,
+    OrchestrationStage.CANONICALIZATION_RECORDED: (
+        OrchestrationStage.POST_CANONICAL_STABILITY_REVIEWED
+    ),
+    OrchestrationStage.POST_CANONICAL_STABILITY_REVIEWED: OrchestrationStage.BASELINE_REGISTERED,
 }
 
 
@@ -80,6 +86,8 @@ class OrchestrationState:
     shadow_health_report_fingerprint: str | None = None
     canonical_review_fingerprint: str | None = None
     canonicalization_receipt_fingerprint: str | None = None
+    post_canonical_stability_report_fingerprint: str | None = None
+    baseline_registry_record_fingerprint: str | None = None
     state_fingerprint: str = ""
 
     def as_dict(self) -> dict[str, Any]:
@@ -103,6 +111,10 @@ class OrchestrationState:
             "shadow_health_report_fingerprint": self.shadow_health_report_fingerprint,
             "canonical_review_fingerprint": self.canonical_review_fingerprint,
             "canonicalization_receipt_fingerprint": self.canonicalization_receipt_fingerprint,
+            "post_canonical_stability_report_fingerprint": (
+                self.post_canonical_stability_report_fingerprint
+            ),
+            "baseline_registry_record_fingerprint": self.baseline_registry_record_fingerprint,
             "state_fingerprint": self.state_fingerprint,
         }
 
@@ -244,6 +256,20 @@ class OrchestrationStateStore:
             receipt_fingerprint,
         )
 
+    def record_post_canonical_stability(self, *, report_fingerprint: str) -> OrchestrationState:
+        return self._record_sha_stage(
+            OrchestrationStage.POST_CANONICAL_STABILITY_REVIEWED,
+            "post_canonical_stability_report_fingerprint",
+            report_fingerprint,
+        )
+
+    def record_baseline_registry(self, *, record_fingerprint: str) -> OrchestrationState:
+        return self._record_sha_stage(
+            OrchestrationStage.BASELINE_REGISTERED,
+            "baseline_registry_record_fingerprint",
+            record_fingerprint,
+        )
+
     def latest(self) -> OrchestrationState | None:
         return self._latest
 
@@ -298,6 +324,8 @@ class OrchestrationStateStore:
             "shadow_health_report_fingerprint",
             "canonical_review_fingerprint",
             "canonicalization_receipt_fingerprint",
+            "post_canonical_stability_report_fingerprint",
+            "baseline_registry_record_fingerprint",
         )
         for event in self.journal.read_events():
             if event.event_type != self._EVENT_TYPE:
@@ -358,6 +386,12 @@ class OrchestrationStateStore:
                 canonicalization_receipt_fingerprint=self._optional_text(
                     payload.get("canonicalization_receipt_fingerprint")
                 ),
+                post_canonical_stability_report_fingerprint=self._optional_text(
+                    payload.get("post_canonical_stability_report_fingerprint")
+                ),
+                baseline_registry_record_fingerprint=self._optional_text(
+                    payload.get("baseline_registry_record_fingerprint")
+                ),
                 state_fingerprint=str(payload["state_fingerprint"]),
             )
         except (KeyError, ValueError) as exc:
@@ -389,6 +423,8 @@ class OrchestrationStateStore:
             "shadow_health_report_fingerprint",
             "canonical_review_fingerprint",
             "canonicalization_receipt_fingerprint",
+            "post_canonical_stability_report_fingerprint",
+            "baseline_registry_record_fingerprint",
         )
         for field in sha_fields:
             value = getattr(state, field)
@@ -416,6 +452,12 @@ class OrchestrationStateStore:
             OrchestrationStage.CANONICAL_REVIEWED: ("canonical_review_fingerprint",),
             OrchestrationStage.CANONICALIZATION_RECORDED: (
                 "canonicalization_receipt_fingerprint",
+            ),
+            OrchestrationStage.POST_CANONICAL_STABILITY_REVIEWED: (
+                "post_canonical_stability_report_fingerprint",
+            ),
+            OrchestrationStage.BASELINE_REGISTERED: (
+                "baseline_registry_record_fingerprint",
             ),
         }
         for checkpoint_stage, fields in required_by_stage.items():
