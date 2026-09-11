@@ -10,7 +10,6 @@ from .model_candidate import (
     MODEL_CANDIDATE_SCHEMA_VERSION,
     PROMOTION_REVIEW_SCHEMA_VERSION,
     ModelCandidate,
-    ModelCandidateError,
     PromotionReviewDecision,
     PromotionReviewRecord,
 )
