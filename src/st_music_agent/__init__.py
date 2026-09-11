@@ -26,10 +26,10 @@ from .canonical_baseline import (
     CanonicalBaselineError,
     CanonicalBaselineReview,
     CanonicalBaselineReviewGate,
-    CanonicalReviewDecision,
     CanonicalizationOutcome,
     CanonicalizationReceipt,
     CanonicalizationReceiptBuilder,
+    CanonicalReviewDecision,
 )
 from .catalog import DEFAULT_MODELS
 from .contracts import ActionRequest, AgentTask, ModelProfile, RiskLevel, TaskKind
