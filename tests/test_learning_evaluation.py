@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from st_music_agent.agent_tools import ToolCallRequest, ToolCallStatus, ToolRegistry
 from st_music_agent.learning_evaluation import (
     BenchmarkCaseResult,
     BenchmarkOutcome,
@@ -10,6 +11,7 @@ from st_music_agent.learning_evaluation import (
     LearningEvaluationError,
     LearningEvaluationGate,
     LearningEvaluationPolicy,
+    LearningEvaluationReadToolset,
     PromotionDecision,
 )
 
@@ -206,3 +208,29 @@ def test_policy_snapshot_never_authorizes_automatic_promotion() -> None:
     assert snapshot["regression_allowed"] is False
     assert snapshot["critical_failure_allowed"] is False
     assert snapshot["auto_promote"] is False
+
+
+def test_model_surface_can_only_read_evaluation_policy() -> None:
+    registry = ToolRegistry()
+    LearningEvaluationReadToolset().register_into(registry)
+
+    assert registry.names() == ("learning.evaluation.policy",)
+    result = registry.dispatch(
+        ToolCallRequest(
+            call_id="read-evaluation-policy",
+            tool_name="learning.evaluation.policy",
+            arguments={},
+        )
+    )
+    assert result.status is ToolCallStatus.SUCCESS
+    assert result.output["auto_promote"] is False
+    assert result.output["regression_allowed"] is False
+
+    rejected = registry.dispatch(
+        ToolCallRequest(
+            call_id="try-promote",
+            tool_name="learning.evaluation.promote",
+            arguments={},
+        )
+    )
+    assert rejected.status is ToolCallStatus.REJECTED
