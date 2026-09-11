@@ -17,22 +17,17 @@ from st_music_agent.experience import (
 )
 from st_music_agent.journal import JournalIntegrityError
 from st_music_agent.music_evidence import MusicProject
-from st_music_agent.portfolio_planning import (
-    CrossProjectPlanner,
-    CrossProjectVerifier,
-    PlanVerificationReport,
-    PlanVerificationStatus,
-)
-from test_portfolio_planning import _snapshots
+from st_music_agent.portfolio_planning import PlanVerificationReport, PlanVerificationStatus
 
 
 def _verified_plan() -> tuple[str, PlanVerificationReport]:
-    snapshots = _snapshots()
-    planner = CrossProjectPlanner()
-    plan = planner.plan(snapshots)
-    verification = CrossProjectVerifier(planner).verify(plan, snapshots)
-    assert verification.status is PlanVerificationStatus.PASS
-    return plan.plan_id, verification
+    plan_id = "verified-plan-001"
+    return plan_id, PlanVerificationReport(
+        status=PlanVerificationStatus.PASS,
+        plan_id=plan_id,
+        recomputed_plan_id=plan_id,
+        issues=(),
+    )
 
 
 def _observation(
