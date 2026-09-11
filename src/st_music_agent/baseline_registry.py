@@ -21,7 +21,7 @@ from .post_canonical_stability import (
     PostCanonicalStabilityReport,
 )
 
-BASELINE_REGISTRY_SCHEMA_VERSION = "1.0.0"
+BASELINE_REGISTRY_SCHEMA_VERSION = "1.1.0"
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _MODEL_ID = re.compile(r"^model:[0-9a-f]{64}$")
 
@@ -33,6 +33,7 @@ class BaselineRegistryError(RuntimeError):
 class BaselineRecordKind(str, Enum):
     BOOTSTRAP = "bootstrap"
     CANONICALIZATION = "canonicalization"
+    ROLLBACK = "rollback"
 
 
 def _canonical_hash(value: Any) -> str:
@@ -62,11 +63,13 @@ class BaselineRecord:
     host_registration_ref: str
     evidence_refs: tuple[str, ...]
     record_fingerprint: str
+    rollback_execution_receipt_fingerprint: str | None = None
+    recovery_report_fingerprint: str | None = None
     auto_switch: bool = False
     auto_rollback: bool = False
 
     def as_dict(self) -> dict[str, Any]:
-        return {
+        result = {
             "schema_version": BASELINE_REGISTRY_SCHEMA_VERSION,
             "generation": self.generation,
             "environment": self.environment,
@@ -87,6 +90,16 @@ class BaselineRecord:
             "auto_switch": self.auto_switch,
             "auto_rollback": self.auto_rollback,
         }
+        if (
+            self.record_kind is BaselineRecordKind.ROLLBACK
+            or self.rollback_execution_receipt_fingerprint is not None
+            or self.recovery_report_fingerprint is not None
+        ):
+            result["rollback_execution_receipt_fingerprint"] = (
+                self.rollback_execution_receipt_fingerprint
+            )
+            result["recovery_report_fingerprint"] = self.recovery_report_fingerprint
+        return result
 
 
 class BaselineRegistry:
@@ -128,6 +141,8 @@ class BaselineRegistry:
             rollback_checkpoint_sha256=None,
             canonicalization_receipt_fingerprint=None,
             stability_report_fingerprint=None,
+            rollback_execution_receipt_fingerprint=None,
+            recovery_report_fingerprint=None,
             host_registration_ref=host_registration_ref,
             evidence_refs=evidence_refs,
         )
@@ -180,6 +195,103 @@ class BaselineRegistry:
             rollback_checkpoint_sha256=receipt.rollback_checkpoint_sha256,
             canonicalization_receipt_fingerprint=receipt.receipt_fingerprint,
             stability_report_fingerprint=stability_report.report_fingerprint,
+            rollback_execution_receipt_fingerprint=None,
+            recovery_report_fingerprint=None,
+            host_registration_ref=host_registration_ref,
+            evidence_refs=evidence_refs,
+        )
+        return self._append(record)
+
+    def register_rollback(
+        self,
+        baseline: BaselineRecord,
+        windows: tuple[Any, ...],
+        drift_report: Any,
+        rollback_request: Any,
+        rollback_receipt: Any,
+        recovery_rounds: tuple[Any, ...],
+        recovery_report: Any,
+        *,
+        host_registration_ref: str,
+        evidence_refs: tuple[str, ...],
+    ) -> BaselineRecord:
+        from .drift_watch import DriftWatchGate
+        from .rollback_recovery import (
+            PostRollbackRecoveryDecision,
+            PostRollbackRecoveryGate,
+            RollbackExecutionOutcome,
+            RollbackExecutionReceiptBuilder,
+        )
+
+        if not self._records:
+            raise BaselineRegistryError("baseline registry must be initialized before rollback")
+        current = self._records[-1]
+        DriftWatchGate.verify_baseline_record(baseline)
+        if baseline.record_fingerprint != current.record_fingerprint:
+            raise BaselineRegistryError("rollback baseline differs from current registry record")
+        if baseline.model_id != current.model_id:
+            raise BaselineRegistryError("rollback source model differs from current registry record")
+        if baseline.checkpoint_sha256 != current.checkpoint_sha256:
+            raise BaselineRegistryError(
+                "rollback source checkpoint differs from current registry record"
+            )
+
+        RollbackExecutionReceiptBuilder().verify_with_evidence(
+            baseline,
+            windows,
+            drift_report,
+            rollback_request,
+            rollback_receipt,
+        )
+        RollbackExecutionReceiptBuilder.verify_record(rollback_receipt)
+        PostRollbackRecoveryGate().verify(
+            rollback_receipt,
+            recovery_rounds,
+            recovery_report,
+        )
+        if rollback_receipt.outcome is not RollbackExecutionOutcome.ROLLED_BACK:
+            raise BaselineRegistryError("rollback registration requires successful rollback receipt")
+        if (
+            recovery_report.decision
+            is not PostRollbackRecoveryDecision.ELIGIBLE_FOR_BASELINE_REGISTRATION
+        ):
+            raise BaselineRegistryError("post-rollback recovery is not eligible for registration")
+        if rollback_receipt.environment != self.environment:
+            raise BaselineRegistryError("rollback environment does not match registry")
+        if current.rollback_model_id != rollback_receipt.to_model_id:
+            raise BaselineRegistryError("rollback target model differs from registered predecessor")
+        if current.rollback_checkpoint_sha256 != rollback_receipt.to_checkpoint_sha256:
+            raise BaselineRegistryError(
+                "rollback target checkpoint differs from registered predecessor"
+            )
+        if current.previous_model_id != rollback_receipt.to_model_id:
+            raise BaselineRegistryError("rollback target must equal the exact prior generation")
+        if current.previous_checkpoint_sha256 != rollback_receipt.to_checkpoint_sha256:
+            raise BaselineRegistryError(
+                "rollback checkpoint must equal the exact prior generation checkpoint"
+            )
+        if not any(
+            record.model_id == rollback_receipt.to_model_id
+            and record.checkpoint_sha256 == rollback_receipt.to_checkpoint_sha256
+            for record in self._records[:-1]
+        ):
+            raise BaselineRegistryError("rollback target is absent from registry history")
+        self._require_text(host_registration_ref, "host_registration_ref")
+        self._require_evidence(evidence_refs)
+
+        record = self._build_record(
+            generation=current.generation + 1,
+            record_kind=BaselineRecordKind.ROLLBACK,
+            model_id=rollback_receipt.to_model_id,
+            checkpoint_sha256=rollback_receipt.to_checkpoint_sha256,
+            previous_model_id=current.model_id,
+            previous_checkpoint_sha256=current.checkpoint_sha256,
+            rollback_model_id=None,
+            rollback_checkpoint_sha256=None,
+            canonicalization_receipt_fingerprint=None,
+            stability_report_fingerprint=None,
+            rollback_execution_receipt_fingerprint=rollback_receipt.receipt_fingerprint,
+            recovery_report_fingerprint=recovery_report.report_fingerprint,
             host_registration_ref=host_registration_ref,
             evidence_refs=evidence_refs,
         )
@@ -204,6 +316,8 @@ class BaselineRegistry:
         rollback_checkpoint_sha256: str | None,
         canonicalization_receipt_fingerprint: str | None,
         stability_report_fingerprint: str | None,
+        rollback_execution_receipt_fingerprint: str | None,
+        recovery_report_fingerprint: str | None,
         host_registration_ref: str,
         evidence_refs: tuple[str, ...],
     ) -> BaselineRecord:
@@ -225,6 +339,11 @@ class BaselineRegistry:
             "auto_switch": False,
             "auto_rollback": False,
         }
+        if record_kind is BaselineRecordKind.ROLLBACK:
+            base["rollback_execution_receipt_fingerprint"] = (
+                rollback_execution_receipt_fingerprint
+            )
+            base["recovery_report_fingerprint"] = recovery_report_fingerprint
         return BaselineRecord(
             generation=generation,
             environment=self.environment,
@@ -240,6 +359,10 @@ class BaselineRegistry:
             host_registration_ref=host_registration_ref,
             evidence_refs=evidence_refs,
             record_fingerprint=_canonical_hash(base),
+            rollback_execution_receipt_fingerprint=(
+                rollback_execution_receipt_fingerprint
+            ),
+            recovery_report_fingerprint=recovery_report_fingerprint,
             auto_switch=False,
             auto_rollback=False,
         )
@@ -260,18 +383,24 @@ class BaselineRegistry:
                 raise BaselineRegistryError("baseline registry generations are not contiguous")
             if records:
                 previous = records[-1]
-                if record.record_kind is not BaselineRecordKind.CANONICALIZATION:
-                    raise BaselineRegistryError("baseline registry transition kind is invalid")
                 if record.previous_model_id != previous.model_id:
                     raise BaselineRegistryError("baseline registry model lineage is broken")
                 if record.previous_checkpoint_sha256 != previous.checkpoint_sha256:
                     raise BaselineRegistryError("baseline registry checkpoint lineage is broken")
-                if record.rollback_model_id != previous.model_id:
-                    raise BaselineRegistryError("baseline registry rollback model lineage is broken")
-                if record.rollback_checkpoint_sha256 != previous.checkpoint_sha256:
-                    raise BaselineRegistryError(
-                        "baseline registry rollback checkpoint lineage is broken"
-                    )
+                if record.record_kind is BaselineRecordKind.CANONICALIZATION:
+                    if record.rollback_model_id != previous.model_id:
+                        raise BaselineRegistryError("baseline registry rollback model lineage is broken")
+                    if record.rollback_checkpoint_sha256 != previous.checkpoint_sha256:
+                        raise BaselineRegistryError(
+                            "baseline registry rollback checkpoint lineage is broken"
+                        )
+                elif record.record_kind is BaselineRecordKind.ROLLBACK:
+                    if record.model_id != previous.rollback_model_id:
+                        raise BaselineRegistryError("rollback generation model target is invalid")
+                    if record.checkpoint_sha256 != previous.rollback_checkpoint_sha256:
+                        raise BaselineRegistryError("rollback generation checkpoint target is invalid")
+                else:
+                    raise BaselineRegistryError("baseline registry transition kind is invalid")
             elif record.record_kind is not BaselineRecordKind.BOOTSTRAP:
                 raise BaselineRegistryError("first baseline registry record must be bootstrap")
             records.append(record)
@@ -307,6 +436,12 @@ class BaselineRegistry:
                 host_registration_ref=str(payload["host_registration_ref"]),
                 evidence_refs=tuple(str(item) for item in payload["evidence_refs"]),
                 record_fingerprint=str(payload["record_fingerprint"]),
+                rollback_execution_receipt_fingerprint=self._optional_text(
+                    payload.get("rollback_execution_receipt_fingerprint")
+                ),
+                recovery_report_fingerprint=self._optional_text(
+                    payload.get("recovery_report_fingerprint")
+                ),
                 auto_switch=bool(payload["auto_switch"]),
                 auto_rollback=bool(payload["auto_rollback"]),
             )
@@ -333,6 +468,8 @@ class BaselineRegistry:
             record.rollback_checkpoint_sha256,
             record.canonicalization_receipt_fingerprint,
             record.stability_report_fingerprint,
+            record.rollback_execution_receipt_fingerprint,
+            record.recovery_report_fingerprint,
         )
         for value in optional_models:
             if value is not None:
@@ -344,9 +481,40 @@ class BaselineRegistry:
         if record.record_kind is BaselineRecordKind.BOOTSTRAP:
             if any(value is not None for value in (*optional_models, *optional_hashes)):
                 raise BaselineRegistryError("bootstrap record cannot claim prior transition evidence")
+        elif record.record_kind is BaselineRecordKind.CANONICALIZATION:
+            required = (
+                record.previous_model_id,
+                record.previous_checkpoint_sha256,
+                record.rollback_model_id,
+                record.rollback_checkpoint_sha256,
+                record.canonicalization_receipt_fingerprint,
+                record.stability_report_fingerprint,
+            )
+            if any(value is None for value in required):
+                raise BaselineRegistryError(
+                    "canonicalization record requires complete lineage evidence"
+                )
+            if (
+                record.rollback_execution_receipt_fingerprint is not None
+                or record.recovery_report_fingerprint is not None
+            ):
+                raise BaselineRegistryError("canonicalization record cannot claim rollback evidence")
         else:
-            if any(value is None for value in (*optional_models, *optional_hashes)):
-                raise BaselineRegistryError("canonicalization record requires complete lineage evidence")
+            required = (
+                record.previous_model_id,
+                record.previous_checkpoint_sha256,
+                record.rollback_execution_receipt_fingerprint,
+                record.recovery_report_fingerprint,
+            )
+            if any(value is None for value in required):
+                raise BaselineRegistryError("rollback record requires complete recovery evidence")
+            if record.rollback_model_id is not None or record.rollback_checkpoint_sha256 is not None:
+                raise BaselineRegistryError("rollback record cannot invent a new fallback target")
+            if (
+                record.canonicalization_receipt_fingerprint is not None
+                or record.stability_report_fingerprint is not None
+            ):
+                raise BaselineRegistryError("rollback record cannot claim canonicalization evidence")
 
         base = record.as_dict()
         fingerprint = base.pop("record_fingerprint")
