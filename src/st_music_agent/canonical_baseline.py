@@ -7,11 +7,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
-from .activation_receipt import (
-    ActivationReceipt,
-    ActivationReceiptBuilder,
-    ActivationReceiptOutcome,
-)
+from .activation_receipt import ActivationReceipt, ActivationReceiptBuilder, ActivationReceiptOutcome
 from .shadow_health import (
     RuntimeCheck,
     ShadowHealthDecision,
@@ -49,6 +45,16 @@ def _canonical_hash(value: Any) -> str:
         allow_nan=False,
     ).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
+
+
+def _require_sha(value: str, label: str) -> None:
+    if not isinstance(value, str) or not _SHA256.fullmatch(value):
+        raise CanonicalBaselineError(f"{label} is invalid")
+
+
+def _require_model(value: str, label: str) -> None:
+    if not isinstance(value, str) or not _MODEL_ID.fullmatch(value):
+        raise CanonicalBaselineError(f"{label} is invalid")
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,7 +97,7 @@ class CanonicalBaselineReview:
 
 
 class CanonicalBaselineReviewGate:
-    """Revalidates A22 runtime evidence before host canonicalization may be reviewed."""
+    """Recomputes A22 runtime evidence before host canonicalization may be reviewed."""
 
     def review(
         self,
@@ -106,10 +112,8 @@ class CanonicalBaselineReviewGate:
         ShadowHealthGate().verify(receipt, checks, shadow_report)
         if receipt.outcome is not ActivationReceiptOutcome.ACTIVATED:
             raise CanonicalBaselineError("canonical review requires an activated receipt")
-        if not _MODEL_ID.fullmatch(current_canonical_id):
-            raise ValueError("current_canonical_id must be a model candidate id")
-        if not _SHA256.fullmatch(current_canonical_checkpoint_sha256):
-            raise ValueError("current canonical checkpoint hash is invalid")
+        _require_model(current_canonical_id, "current canonical id")
+        _require_sha(current_canonical_checkpoint_sha256, "current canonical checkpoint")
 
         reasons: list[str] = []
         if shadow_report.decision is not ShadowHealthDecision.ELIGIBLE_FOR_CANONICAL_REVIEW:
@@ -158,30 +162,42 @@ class CanonicalBaselineReviewGate:
             decision=decision,
             reasons=tuple(reasons),
             review_fingerprint=_canonical_hash(base),
-            human_approval_required=True,
-            canonicalization_authorized=False,
-            auto_canonicalize=False,
         )
 
+    def verify_with_evidence(
+        self,
+        receipt: ActivationReceipt,
+        checks: tuple[RuntimeCheck, ...],
+        shadow_report: ShadowHealthReport,
+        review: CanonicalBaselineReview,
+    ) -> None:
+        recomputed = self.review(
+            receipt,
+            checks,
+            shadow_report,
+            current_canonical_id=review.current_canonical_id,
+            current_canonical_checkpoint_sha256=review.current_canonical_checkpoint_sha256,
+        )
+        if recomputed.as_dict() != review.as_dict():
+            raise CanonicalBaselineError("canonical review differs from source-evidence recomputation")
+
     @staticmethod
-    def verify(review: CanonicalBaselineReview) -> None:
+    def verify_record(review: CanonicalBaselineReview) -> None:
         if not review.human_approval_required:
             raise CanonicalBaselineError("canonical review must require human approval")
         if review.canonicalization_authorized or review.auto_canonicalize:
             raise CanonicalBaselineError("canonical review cannot authorize canonicalization")
-        if not _MODEL_ID.fullmatch(review.candidate_id):
-            raise CanonicalBaselineError("canonical review candidate id is invalid")
-        if not _MODEL_ID.fullmatch(review.current_canonical_id):
-            raise CanonicalBaselineError("canonical review current baseline id is invalid")
+        _require_model(review.candidate_id, "canonical review candidate id")
+        _require_model(review.current_canonical_id, "canonical review current baseline id")
+        _require_model(review.rollback_candidate_id, "canonical review rollback id")
         for label, value in (
-            ("candidate_checkpoint_sha256", review.candidate_checkpoint_sha256),
-            ("current_canonical_checkpoint_sha256", review.current_canonical_checkpoint_sha256),
-            ("rollback_checkpoint_sha256", review.rollback_checkpoint_sha256),
-            ("activation_receipt_fingerprint", review.activation_receipt_fingerprint),
-            ("shadow_health_report_fingerprint", review.shadow_health_report_fingerprint),
+            ("candidate checkpoint", review.candidate_checkpoint_sha256),
+            ("current canonical checkpoint", review.current_canonical_checkpoint_sha256),
+            ("rollback checkpoint", review.rollback_checkpoint_sha256),
+            ("activation receipt fingerprint", review.activation_receipt_fingerprint),
+            ("shadow health report fingerprint", review.shadow_health_report_fingerprint),
         ):
-            if not _SHA256.fullmatch(value):
-                raise CanonicalBaselineError(f"canonical review {label} is invalid")
+            _require_sha(value, label)
         if review.rollback_candidate_id != review.current_canonical_id:
             raise CanonicalBaselineError("canonical review rollback model is invalid")
         if review.rollback_checkpoint_sha256 != review.current_canonical_checkpoint_sha256:
@@ -189,7 +205,8 @@ class CanonicalBaselineReviewGate:
 
         base = review.as_dict()
         fingerprint = base.pop("review_fingerprint")
-        if not _SHA256.fullmatch(fingerprint) or _canonical_hash(base) != fingerprint:
+        _require_sha(fingerprint, "canonical review fingerprint")
+        if _canonical_hash(base) != fingerprint:
             raise CanonicalBaselineError("canonical review fingerprint does not verify")
 
 
@@ -243,6 +260,9 @@ class CanonicalizationReceiptBuilder:
 
     def bind(
         self,
+        receipt: ActivationReceipt,
+        checks: tuple[RuntimeCheck, ...],
+        shadow_report: ShadowHealthReport,
         review: CanonicalBaselineReview,
         *,
         outcome: CanonicalizationOutcome,
@@ -252,7 +272,9 @@ class CanonicalizationReceiptBuilder:
         observed_canonical_id: str | None,
         observed_canonical_checkpoint_sha256: str | None,
     ) -> CanonicalizationReceipt:
-        CanonicalBaselineReviewGate.verify(review)
+        gate = CanonicalBaselineReviewGate()
+        gate.verify_with_evidence(receipt, checks, shadow_report, review)
+        gate.verify_record(review)
         if review.decision is not CanonicalReviewDecision.ELIGIBLE_FOR_HOST_CANONICALIZATION:
             raise CanonicalBaselineError("canonical review is not eligible for host canonicalization")
         self._require_text(host_authorization_ref, "host_authorization_ref")
@@ -286,12 +308,10 @@ class CanonicalizationReceiptBuilder:
                     )
             post_canonical_health_required = False
 
-        if observed_canonical_id is not None and not _MODEL_ID.fullmatch(observed_canonical_id):
-            raise ValueError("observed_canonical_id must be a model candidate id")
-        if observed_canonical_checkpoint_sha256 is not None and not _SHA256.fullmatch(
-            observed_canonical_checkpoint_sha256
-        ):
-            raise ValueError("observed canonical checkpoint hash is invalid")
+        if observed_canonical_id is not None:
+            _require_model(observed_canonical_id, "observed canonical id")
+        if observed_canonical_checkpoint_sha256 is not None:
+            _require_sha(observed_canonical_checkpoint_sha256, "observed canonical checkpoint")
 
         base = {
             "schema_version": CANONICALIZATION_RECEIPT_SCHEMA_VERSION,
@@ -330,8 +350,6 @@ class CanonicalizationReceiptBuilder:
             observed_canonical_checkpoint_sha256=observed_canonical_checkpoint_sha256,
             receipt_fingerprint=_canonical_hash(base),
             post_canonical_health_required=post_canonical_health_required,
-            auto_rollback=False,
-            auto_canonicalize=False,
         )
 
     @staticmethod
@@ -379,7 +397,8 @@ class CanonicalizationReceiptBuilder:
 
         base = receipt.as_dict()
         fingerprint = base.pop("receipt_fingerprint")
-        if not _SHA256.fullmatch(fingerprint) or _canonical_hash(base) != fingerprint:
+        _require_sha(fingerprint, "canonicalization receipt fingerprint")
+        if _canonical_hash(base) != fingerprint:
             raise CanonicalBaselineError("canonicalization receipt fingerprint does not verify")
 
     @staticmethod
