@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Mapping
+from typing import Any
+
+MUSIC_EVIDENCE_SCHEMA_VERSION = "1.0.0"
 
 
 class MusicEvidenceError(RuntimeError):
@@ -68,6 +71,7 @@ class MusicEvidenceSnapshot:
 
     def as_dict(self) -> dict[str, Any]:
         return {
+            "schema_version": MUSIC_EVIDENCE_SCHEMA_VERSION,
             "project": self.project.value,
             "authority": self.authority.value,
             "state": self.state,
