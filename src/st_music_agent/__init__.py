@@ -69,6 +69,14 @@ from .portfolio_planning import (
     PortfolioPlanningService,
 )
 from .router import ModelRouter
+from .training_run import (
+    TRAINING_RUN_SCHEMA_VERSION,
+    TrainingRunCompletion,
+    TrainingRunContractBuilder,
+    TrainingRunContractError,
+    TrainingRunOutcome,
+    TrainingRunSpec,
+)
 
 __all__ = [
     "DATASET_EXPORT_SCHEMA_VERSION",
@@ -80,6 +88,7 @@ __all__ = [
     "MUSIC_EVIDENCE_SCHEMA_VERSION",
     "PORTFOLIO_PLAN_SCHEMA_VERSION",
     "PORTFOLIO_POLICY_VERSION",
+    "TRAINING_RUN_SCHEMA_VERSION",
     "ActionRequest",
     "AgentTask",
     "AutonomyDecision",
@@ -130,5 +139,10 @@ __all__ = [
     "ScoreEditorEvidenceAdapter",
     "ScoreFollowingEvidenceAdapter",
     "TaskKind",
+    "TrainingRunCompletion",
+    "TrainingRunContractBuilder",
+    "TrainingRunContractError",
+    "TrainingRunOutcome",
+    "TrainingRunSpec",
     "build_default_music_domain_toolset",
 ]
