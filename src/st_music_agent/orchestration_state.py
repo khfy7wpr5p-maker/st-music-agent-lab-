@@ -30,6 +30,8 @@ class OrchestrationStage(IntEnum):
     ACTIVATION_REQUESTED = 70
     ACTIVATION_RECORDED = 80
     SHADOW_HEALTH_REVIEWED = 90
+    CANONICAL_REVIEWED = 100
+    CANONICALIZATION_RECORDED = 110
 
 
 _NEXT_STAGE = {
@@ -42,6 +44,8 @@ _NEXT_STAGE = {
     OrchestrationStage.PROMOTION_REVIEWED: OrchestrationStage.ACTIVATION_REQUESTED,
     OrchestrationStage.ACTIVATION_REQUESTED: OrchestrationStage.ACTIVATION_RECORDED,
     OrchestrationStage.ACTIVATION_RECORDED: OrchestrationStage.SHADOW_HEALTH_REVIEWED,
+    OrchestrationStage.SHADOW_HEALTH_REVIEWED: OrchestrationStage.CANONICAL_REVIEWED,
+    OrchestrationStage.CANONICAL_REVIEWED: OrchestrationStage.CANONICALIZATION_RECORDED,
 }
 
 
@@ -74,6 +78,8 @@ class OrchestrationState:
     activation_request_fingerprint: str | None = None
     activation_receipt_fingerprint: str | None = None
     shadow_health_report_fingerprint: str | None = None
+    canonical_review_fingerprint: str | None = None
+    canonicalization_receipt_fingerprint: str | None = None
     state_fingerprint: str = ""
 
     def as_dict(self) -> dict[str, Any]:
@@ -95,16 +101,14 @@ class OrchestrationState:
             "activation_request_fingerprint": self.activation_request_fingerprint,
             "activation_receipt_fingerprint": self.activation_receipt_fingerprint,
             "shadow_health_report_fingerprint": self.shadow_health_report_fingerprint,
+            "canonical_review_fingerprint": self.canonical_review_fingerprint,
+            "canonicalization_receipt_fingerprint": self.canonicalization_receipt_fingerprint,
             "state_fingerprint": self.state_fingerprint,
         }
 
 
 class OrchestrationStateStore:
-    """Host-write-only resumable evidence pointers for the guarded lifecycle.
-
-    The store persists structured identities/fingerprints only. It intentionally has no field for
-    prompts, provider messages or hidden reasoning.
-    """
+    """Hash-chained host-only evidence pointers for the guarded model lifecycle."""
 
     _EVENT_TYPE = "orchestration_state"
 
@@ -120,13 +124,16 @@ class OrchestrationStateStore:
             raise OrchestrationStateError("orchestration has already started")
         self._require_sha(plan_id, "plan_id")
         self._require_text(plan_verification_ref, "plan_verification_ref")
-        state = OrchestrationState(
-            orchestration_id=self.orchestration_id,
-            stage=OrchestrationStage.PLAN_VERIFIED,
-            plan_id=plan_id,
-            plan_verification_ref=plan_verification_ref,
+        return self._persist(
+            self._with_fingerprint(
+                OrchestrationState(
+                    orchestration_id=self.orchestration_id,
+                    stage=OrchestrationStage.PLAN_VERIFIED,
+                    plan_id=plan_id,
+                    plan_verification_ref=plan_verification_ref,
+                )
+            )
         )
-        return self._persist(self._with_fingerprint(state))
 
     def record_execution(self, *, execution_record_id: str) -> OrchestrationState:
         self._require_next(OrchestrationStage.EXECUTION_VERIFIED)
@@ -196,45 +203,64 @@ class OrchestrationStateStore:
         return self._advance(OrchestrationStage.MODEL_REGISTERED, model_candidate_id=candidate_id)
 
     def record_promotion_review(self, *, review_fingerprint: str) -> OrchestrationState:
-        self._require_next(OrchestrationStage.PROMOTION_REVIEWED)
-        self._require_sha(review_fingerprint, "promotion_review_fingerprint")
-        return self._advance(
+        return self._record_sha_stage(
             OrchestrationStage.PROMOTION_REVIEWED,
-            promotion_review_fingerprint=review_fingerprint,
+            "promotion_review_fingerprint",
+            review_fingerprint,
         )
 
     def record_activation_request(self, *, request_fingerprint: str) -> OrchestrationState:
-        self._require_next(OrchestrationStage.ACTIVATION_REQUESTED)
-        self._require_sha(request_fingerprint, "activation_request_fingerprint")
-        return self._advance(
+        return self._record_sha_stage(
             OrchestrationStage.ACTIVATION_REQUESTED,
-            activation_request_fingerprint=request_fingerprint,
+            "activation_request_fingerprint",
+            request_fingerprint,
         )
 
     def record_activation_receipt(self, *, receipt_fingerprint: str) -> OrchestrationState:
-        self._require_next(OrchestrationStage.ACTIVATION_RECORDED)
-        self._require_sha(receipt_fingerprint, "activation_receipt_fingerprint")
-        return self._advance(
+        return self._record_sha_stage(
             OrchestrationStage.ACTIVATION_RECORDED,
-            activation_receipt_fingerprint=receipt_fingerprint,
+            "activation_receipt_fingerprint",
+            receipt_fingerprint,
         )
 
     def record_shadow_health(self, *, report_fingerprint: str) -> OrchestrationState:
-        self._require_next(OrchestrationStage.SHADOW_HEALTH_REVIEWED)
-        self._require_sha(report_fingerprint, "shadow_health_report_fingerprint")
-        return self._advance(
+        return self._record_sha_stage(
             OrchestrationStage.SHADOW_HEALTH_REVIEWED,
-            shadow_health_report_fingerprint=report_fingerprint,
+            "shadow_health_report_fingerprint",
+            report_fingerprint,
+        )
+
+    def record_canonical_review(self, *, review_fingerprint: str) -> OrchestrationState:
+        return self._record_sha_stage(
+            OrchestrationStage.CANONICAL_REVIEWED,
+            "canonical_review_fingerprint",
+            review_fingerprint,
+        )
+
+    def record_canonicalization_receipt(self, *, receipt_fingerprint: str) -> OrchestrationState:
+        return self._record_sha_stage(
+            OrchestrationStage.CANONICALIZATION_RECORDED,
+            "canonicalization_receipt_fingerprint",
+            receipt_fingerprint,
         )
 
     def latest(self) -> OrchestrationState | None:
         return self._latest
 
+    def _record_sha_stage(
+        self,
+        stage: OrchestrationStage,
+        field: str,
+        value: str,
+    ) -> OrchestrationState:
+        self._require_next(stage)
+        self._require_sha(value, field)
+        return self._advance(stage, **{field: value})
+
     def _advance(self, stage: OrchestrationStage, **updates: Any) -> OrchestrationState:
-        state = self._latest
-        if state is None:
+        if self._latest is None:
             raise OrchestrationStateError("orchestration has not started")
-        updated = replace(state, stage=stage, state_fingerprint="", **updates)
+        updated = replace(self._latest, stage=stage, state_fingerprint="", **updates)
         return self._persist(self._with_fingerprint(updated))
 
     def _require_next(self, stage: OrchestrationStage) -> None:
@@ -255,6 +281,24 @@ class OrchestrationStateStore:
 
     def _load_latest(self) -> OrchestrationState | None:
         latest: OrchestrationState | None = None
+        immutable_fields = (
+            "plan_id",
+            "plan_verification_ref",
+            "execution_record_id",
+            "experience_record_id",
+            "evaluation_report_hash",
+            "dataset_manifest_hash",
+            "training_input_fingerprint",
+            "training_completion_fingerprint",
+            "training_authorization_ref",
+            "model_candidate_id",
+            "promotion_review_fingerprint",
+            "activation_request_fingerprint",
+            "activation_receipt_fingerprint",
+            "shadow_health_report_fingerprint",
+            "canonical_review_fingerprint",
+            "canonicalization_receipt_fingerprint",
+        )
         for event in self.journal.read_events():
             if event.event_type != self._EVENT_TYPE:
                 raise OrchestrationStateError("orchestration journal contains unsupported event")
@@ -262,22 +306,7 @@ class OrchestrationStateStore:
             if latest is not None:
                 if state.stage < latest.stage:
                     raise OrchestrationStateError("orchestration stage regressed in journal")
-                for field in (
-                    "plan_id",
-                    "plan_verification_ref",
-                    "execution_record_id",
-                    "experience_record_id",
-                    "evaluation_report_hash",
-                    "dataset_manifest_hash",
-                    "training_input_fingerprint",
-                    "training_completion_fingerprint",
-                    "training_authorization_ref",
-                    "model_candidate_id",
-                    "promotion_review_fingerprint",
-                    "activation_request_fingerprint",
-                    "activation_receipt_fingerprint",
-                    "shadow_health_report_fingerprint",
-                ):
+                for field in immutable_fields:
                     previous = getattr(latest, field)
                     current = getattr(state, field)
                     if previous is not None and current != previous:
@@ -292,10 +321,9 @@ class OrchestrationStateStore:
         if payload.get("schema_version") != ORCHESTRATION_STATE_SCHEMA_VERSION:
             raise OrchestrationStateError("orchestration state schema is unsupported")
         try:
-            stage = OrchestrationStage[str(payload["stage"]).upper()]
             state = OrchestrationState(
                 orchestration_id=str(payload["orchestration_id"]),
-                stage=stage,
+                stage=OrchestrationStage[str(payload["stage"]).upper()],
                 plan_id=str(payload["plan_id"]),
                 plan_verification_ref=str(payload["plan_verification_ref"]),
                 execution_record_id=self._optional_text(payload.get("execution_record_id")),
@@ -324,6 +352,12 @@ class OrchestrationStateStore:
                 shadow_health_report_fingerprint=self._optional_text(
                     payload.get("shadow_health_report_fingerprint")
                 ),
+                canonical_review_fingerprint=self._optional_text(
+                    payload.get("canonical_review_fingerprint")
+                ),
+                canonicalization_receipt_fingerprint=self._optional_text(
+                    payload.get("canonicalization_receipt_fingerprint")
+                ),
                 state_fingerprint=str(payload["state_fingerprint"]),
             )
         except (KeyError, ValueError) as exc:
@@ -341,20 +375,25 @@ class OrchestrationStateStore:
             raise OrchestrationStateError("orchestration id does not match store")
         self._require_sha(state.plan_id, "plan_id")
         self._require_text(state.plan_verification_ref, "plan_verification_ref")
-        for label, value in (
-            ("execution_record_id", state.execution_record_id),
-            ("experience_record_id", state.experience_record_id),
-            ("evaluation_report_hash", state.evaluation_report_hash),
-            ("dataset_manifest_hash", state.dataset_manifest_hash),
-            ("training_input_fingerprint", state.training_input_fingerprint),
-            ("training_completion_fingerprint", state.training_completion_fingerprint),
-            ("promotion_review_fingerprint", state.promotion_review_fingerprint),
-            ("activation_request_fingerprint", state.activation_request_fingerprint),
-            ("activation_receipt_fingerprint", state.activation_receipt_fingerprint),
-            ("shadow_health_report_fingerprint", state.shadow_health_report_fingerprint),
-        ):
+
+        sha_fields = (
+            "execution_record_id",
+            "experience_record_id",
+            "evaluation_report_hash",
+            "dataset_manifest_hash",
+            "training_input_fingerprint",
+            "training_completion_fingerprint",
+            "promotion_review_fingerprint",
+            "activation_request_fingerprint",
+            "activation_receipt_fingerprint",
+            "shadow_health_report_fingerprint",
+            "canonical_review_fingerprint",
+            "canonicalization_receipt_fingerprint",
+        )
+        for field in sha_fields:
+            value = getattr(state, field)
             if value is not None:
-                self._require_sha(value, label)
+                self._require_sha(value, field)
         if state.model_candidate_id is not None and not _MODEL_ID.fullmatch(state.model_candidate_id):
             raise OrchestrationStateError("model_candidate_id is invalid")
         if state.training_authorization_ref is not None:
@@ -374,6 +413,10 @@ class OrchestrationStateStore:
             OrchestrationStage.ACTIVATION_REQUESTED: ("activation_request_fingerprint",),
             OrchestrationStage.ACTIVATION_RECORDED: ("activation_receipt_fingerprint",),
             OrchestrationStage.SHADOW_HEALTH_REVIEWED: ("shadow_health_report_fingerprint",),
+            OrchestrationStage.CANONICAL_REVIEWED: ("canonical_review_fingerprint",),
+            OrchestrationStage.CANONICALIZATION_RECORDED: (
+                "canonicalization_receipt_fingerprint",
+            ),
         }
         for checkpoint_stage, fields in required_by_stage.items():
             if state.stage >= checkpoint_stage:
