@@ -1,6 +1,6 @@
 # ST Music Agent Lab — Architecture Map
 
-Status: A1-A24 guarded agent + verified planning/learning/evaluation/data/training/model-runtime/canonical-baseline-stability foundation
+Status: A1-A25 guarded agent + verified planning/learning/evaluation/data/training/model-runtime/canonical-baseline-stability/drift foundation
 Date: 2026-09-11
 
 ## Purpose
@@ -8,8 +8,8 @@ Date: 2026-09-11
 ST Music Agent Lab is a model-agnostic engineering and music-intelligence agent layer. Models,
 OpenHands, GitHub and ST music projects attach through explicit adapters while ST-owned policy,
 tool, budget, approval, evidence, verification, learning, evaluation, execution, dataset,
-training, model-candidate, orchestration, activation, canonical-baseline and stable-baseline
-registry boundaries remain authoritative.
+training, model-candidate, orchestration, activation, canonical-baseline, stable-baseline registry
+and operational-drift boundaries remain authoritative.
 
 ## A1-A11 — Guarded execution
 
@@ -114,6 +114,39 @@ canonicalization receipt fingerprint, stability report fingerprint, host registr
 and supporting evidence. The registry records state only; it cannot deploy, switch or roll back a
 model.
 
+## A25 — Long-term drift watch + rollback review request
+
+A25 adds operational monitoring for an already-registered canonical baseline. `DriftWatchGate`
+requires at least four ordered observation windows. Every window contains exactly one:
+
+- `serving_identity`;
+- `health`;
+- `quality`;
+- `distribution`;
+- `rollback_readiness`.
+
+Serving identity must remain the exact Baseline Registry model/checkpoint. Unavailable evidence
+cannot open rollback review. A single degraded window is insufficient: the default versioned
+policy requires at least two consecutive degraded windows and requires the latest window to remain
+degraded. Rollback readiness must remain stable across the complete watch evidence.
+
+Possible decisions are `healthy`, `observe` and `eligible_for_rollback_review`. Even the last state
+keeps `rollback_authorized=false` and `auto_rollback=false`.
+
+`RollbackReviewRequestBuilder` independently recomputes the drift report and then binds the request
+to the exact Baseline Registry predecessor model/checkpoint. The request always keeps
+`human_approval_required=true`, `rollback_authorized=false` and `auto_rollback=false`. No rollback
+executor or serving credential is exposed to the model.
+
+A25 deliberately uses a separate SHA-256 hash-chained `OperationalWatchStateStore` rather than
+extending the model-training lifecycle indefinitely:
+
+`baseline_bound -> drift_reviewed -> rollback_review_requested`
+
+A healthy watch can stop at `drift_reviewed`. Future watch cycles can bind the same still-current
+baseline under new watch ids. Stage skipping, baseline replacement and evidence replacement fail
+closed.
+
 ## Resumable lifecycle
 
 ```text
@@ -136,6 +169,12 @@ music evidence
   -> canonicalization receipt
   -> repeated post-canonical stability evidence
   -> append-only baseline registry
+
+registered baseline
+  -> operational drift watch
+  -> healthy / observe
+  -> or rollback review request
+  -> host/human review only
 ```
 
 `OrchestrationStateStore` records structured fingerprints through:
@@ -145,18 +184,16 @@ music evidence
 -> canonical_reviewed -> canonicalization_recorded -> post_canonical_stability_reviewed
 -> baseline_registered`
 
-Stage skipping, stage regression and silent replacement of prior evidence fail closed.
+Operational watch cycles are separate hash-chained state and do not rewrite model-lifecycle
+history.
 
-## A25 continuation
+## A26 continuation
 
-1. Add explicit drift/regression watch evidence for already-registered canonical baselines.
-2. Define a host-reviewed rollback-request contract tied to Baseline Registry lineage without
-   adding an automatic rollback executor.
-3. Preserve historical baseline generations so rollback targets never depend on chat memory.
-4. Allow planner/verifier to read stable baseline lineage as bounded evidence, not as deployment
-   authority.
-5. Keep serving credentials, actual model switches and rollback execution outside model-callable
-   tools.
+1. Define separately authorized host rollback execution receipts bound to an A25 request.
+2. Add post-rollback serving identity, health and recovery verification before registry mutation.
+3. Record an explicit rollback generation in baseline history without deleting the failed baseline.
+4. Keep rollback credentials and execution outside all model-callable tools.
+5. Require host/human authorization for every production-impacting rollback.
 
 ## Architectural invariants
 
@@ -179,5 +216,8 @@ Stage skipping, stage regression and silent replacement of prior evidence fail c
 16. Post-canonical stability requires repeated exact-identity health evidence before registry
     recording.
 17. Baseline Registry lineage is append-only and cannot switch or roll back serving state.
-18. Automatic canonicalization, baseline switching and rollback remain disabled.
-19. Tests define safety behavior before capability is widened.
+18. Drift watch requires sustained evidence and exact current-baseline identity before rollback
+    review can open.
+19. Rollback review requests bind only the registered predecessor and never authorize execution.
+20. Automatic canonicalization, baseline switching and rollback remain disabled.
+21. Tests define safety behavior before capability is widened.

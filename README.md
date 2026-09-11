@@ -5,8 +5,8 @@ agents across ST projects.
 
 ## Current stage
 
-A1-A24 guarded agent + verified evidence/learning/training/model-runtime/canonical-baseline
-stability foundation:
+A1-A25 guarded agent + verified evidence/learning/training/model-runtime/canonical-baseline
+stability/drift foundation:
 
 - **A1-A11:** guarded execution, deterministic privilege policy, budgets, approvals, sandboxing,
   bounded GitHub mutation and restricted OpenHands integration.
@@ -24,8 +24,10 @@ stability foundation:
   canonicalization receipts binding exact previous/new baseline identities.
 - **A24:** repeated post-canonical stability evidence plus an append-only baseline registry that
   records exact canonical lineage without granting model-switch or rollback authority.
+- **A25:** long-term drift/regression evidence plus host-reviewed rollback requests bound only to
+  the exact registered predecessor; rollback execution remains unavailable to the model.
 
-Package version: `0.22.0`.
+Package version: `0.23.0`.
 
 ## Core safety model
 
@@ -85,23 +87,38 @@ separate host canonicalization → canonicalization receipt
 3+ post-canonical stability rounds
         ↓
 append-only baseline registry
+        ↓
+recurring operational drift watches
+        ↓
+healthy / observe / rollback-review eligible
+        ↓
+host review request only
 ```
 
 A successful A23 canonicalization is not considered a stable lifecycle endpoint by itself. A24
-requires at least three ordered observation rounds, each with serving identity, health, quality and
-rollback-readiness evidence. Only a fully successful recomputation is eligible for host baseline
-registration.
+requires at least three ordered observation rounds before host baseline registration. The
+`BaselineRegistry` is append-only and retains exact predecessor/rollback lineage.
 
-The `BaselineRegistry` must be explicitly bootstrapped with the already-existing canonical model.
-A new generation can then be appended only when the registered predecessor and rollback target
-exactly match the A23 receipt. Registry records are hash-chained and keep `auto_switch=false` and
+A25 watches a registered baseline over at least four observation windows. It requires exact serving
+identity, health, quality, distribution and rollback-readiness evidence. A single degraded window
+is insufficient; rollback review needs sustained degradation in at least two consecutive windows
+and the latest window must still be degraded. Unavailable evidence yields `observe`.
+
+`RollbackReviewRequestBuilder` binds rollback review only to the predecessor recorded in Baseline
+Registry. Requests always preserve `human_approval_required=true`, `rollback_authorized=false` and
 `auto_rollback=false`.
 
 ## Resumable evidence state
 
-`OrchestrationStateStore` hash-chains structured fingerprints through the complete lifecycle up to
-`baseline_registered`. Prompts, provider messages and hidden reasoning are not stored as lifecycle
-evidence. Stage skipping, regression and silent replacement of prior evidence fail closed.
+`OrchestrationStateStore` hash-chains the model lifecycle through `baseline_registered`. A25 uses a
+separate `OperationalWatchStateStore` for recurring operational evidence:
+
+`baseline_bound -> drift_reviewed -> rollback_review_requested`
+
+Healthy watches may stop at `drift_reviewed`; later watch cycles can bind the same still-current
+baseline under a new watch id. Prompts, provider messages and hidden reasoning are not stored as
+lifecycle evidence. Stage skipping, regression and silent replacement of prior evidence fail
+closed.
 
 ## Development
 
@@ -124,3 +141,4 @@ See:
 - [`docs/runtime-activation.md`](docs/runtime-activation.md)
 - [`docs/canonical-baseline.md`](docs/canonical-baseline.md)
 - [`docs/post-canonical-stability.md`](docs/post-canonical-stability.md)
+- [`docs/drift-and-rollback.md`](docs/drift-and-rollback.md)
