@@ -1,6 +1,6 @@
 # ST Music Agent Lab — Architecture Map
 
-Status: A1-A18 guarded agent + verified planning/learning/evaluation/data foundation
+Status: A1-A19 guarded agent + verified planning/learning/evaluation/data/training provenance
 Date: 2026-09-11
 
 ## Purpose
@@ -13,8 +13,8 @@ reversible, capability-driven and isolated from the host.
 
 The ST core stays small and framework-independent. Models, OpenHands, GitHub and music projects
 attach through explicit adapters. No external framework may bypass ST-owned policy, tool, budget,
-approval, evidence, verification, learning, evaluation, execution-evidence, dataset or sandbox
-boundaries.
+approval, evidence, verification, learning, evaluation, execution-evidence, dataset, training-run
+or sandbox boundaries.
 
 ## A1-A6 — Core execution and isolation
 
@@ -102,16 +102,9 @@ Read-only model tool: `learning.evaluation.policy`.
 A17 closes the gap between a verified plan and a later success claim.
 
 `ExecutionOutcomeStore` is trusted-host-write-only and hash chained. An `ExecutionObservation`
-must bind to the exact verified plan candidate through:
-
-- `plan_id` and candidate rank;
-- project identity;
-- exact planned action;
-- candidate evidence SHA-256;
-- expected repository;
-- branch and full 40-hex commit SHA;
-- one or more CI checks;
-- one or more validator checks.
+must bind to the exact verified plan candidate through plan id, candidate rank, project, exact
+action, candidate evidence hash, expected repository, branch, full commit SHA, CI checks and
+validator checks.
 
 The provided `PlanVerificationReport` must be PASS and its `plan_id` plus
 `recomputed_plan_id` must equal the same plan.
@@ -142,7 +135,48 @@ Every export contains a manifest SHA-256 and hard-coded authority fields:
 `fine_tuning_candidate` means only that the dataset may later be reviewed by a separately
 authorized training stage.
 
-## Current decision/learning chain
+## A19 — Reproducible training-run contract
+
+`training_run.py` binds a reviewed `fine_tuning_candidate` dataset to the exact inputs that would
+produce a trained checkpoint.
+
+`TrainingRunSpec` includes:
+
+- run id;
+- dataset id + verified manifest SHA-256;
+- base-model id + exact revision + base-model artifact SHA-256;
+- trainer name/version;
+- canonical trainer configuration + configuration SHA-256;
+- deterministic seed;
+- training-code repository + full Git commit SHA;
+- deterministic `input_fingerprint` over the complete input contract.
+
+The dataset manifest is recomputed before a spec is accepted. Offline-evaluation datasets,
+forged manifests or dataset authority flags that claim training/promotion are rejected.
+
+A spec always has:
+
+- `execution_authorized=false`;
+- `auto_start=false`.
+
+If a separately authorized host performs training, `TrainingRunCompletion` binds the same exact
+input fingerprint to:
+
+- explicit host authorization reference;
+- checkpoint SHA-256 for completed runs;
+- explicit training evidence references;
+- deterministic completion fingerprint.
+
+Completed runs always have:
+
+- `evaluation_required=true`;
+- `promotion_authorized=false`;
+- `auto_promote=false`.
+
+Failed or abstained runs cannot claim a checkpoint hash. A19 exposes no model-callable training or
+promotion tool.
+
+## Current decision/learning/training chain
 
 ```text
 four project snapshots
@@ -181,21 +215,37 @@ explicit record-id curation
 CuratedDatasetBuilder
         |
         v
-offline-evaluation / fine-tuning-candidate manifest
+fine-tuning-candidate manifest
         |
  training_authorized=false / auto_train=false / auto_promote=false
+        |
+        v
+TrainingRunSpec
+(dataset + base model + trainer config + seed + code SHA)
+        |
+  execution_authorized=false / auto_start=false
+        |
+        | separate host authorization if training is actually run
+        v
+TrainingRunCompletion
+(input fingerprint + checkpoint SHA + training evidence)
+        |
+ evaluation_required=true / promotion_authorized=false
+        |
+        v
+A16 paired checkpoint evaluation before any promotion review
 ```
 
-## A19 continuation
+## A20 continuation
 
-1. Add an explicitly authorized training-run contract consuming one exact curated dataset manifest
-   plus base-model identity, trainer config and reproducibility seed.
-2. Record training output checkpoint hash and environment provenance without granting promotion.
-3. Require the trained checkpoint to pass the existing A16 paired evaluation against the current
-   baseline before it may become a promotion candidate.
+1. Add a checkpoint/model registry that records immutable model candidate identities and lineage
+   from A19 completion evidence.
+2. Bind every model candidate to its required A16 evaluation report and current baseline identity.
+3. Add an explicit promotion-review contract that can only reference a non-regressing evaluated
+   candidate; keep actual activation as a separate host/human action.
 4. Add resumable orchestration state linking plan, approvals, execution, experience, evaluation,
-   dataset and optional training-run evidence without hidden reasoning.
-5. Keep actual checkpoint activation/promotion as a separate explicit host/human gate.
+   dataset, training and model-candidate evidence without hidden reasoning.
+5. Keep deployment/production activation outside model-callable tools.
 
 ## Architectural invariants
 
@@ -227,6 +277,10 @@ offline-evaluation / fine-tuning-candidate manifest
 26. Dataset curation is explicit by verified execution record ID.
 27. Curated dataset export excludes hidden reasoning/free-form notes.
 28. Dataset export never authorizes training or model promotion.
-29. Future training requires an explicit dataset manifest, reproducible run contract and independent
-    post-training evaluation.
-30. Tests define safety behavior before capability is widened.
+29. Training requires an exact verified fine-tuning-candidate dataset manifest.
+30. Training inputs bind exact base-model artifact, trainer config, seed and code commit.
+31. Creating a training spec never authorizes or auto-starts training.
+32. Completed training binds one checkpoint hash to one exact input fingerprint and authorization
+    reference.
+33. A trained checkpoint requires independent A16 evaluation and is never auto-promoted.
+34. Tests define safety behavior before capability is widened.
