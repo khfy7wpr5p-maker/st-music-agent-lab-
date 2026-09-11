@@ -1,58 +1,123 @@
-# APP1 — Runnable Operator Console
+# APP1–APP2 — Operator Console
 
-APP1 is the first end-user-visible ST Music Agent application layer. It is intentionally small and
-uses only the Python standard library for HTTP serving, so the existing core package remains easy to
-run and test.
+The Operator Console is the first end-user-visible ST Music Agent application layer. It uses the
+Python standard library for HTTP serving and sits above the existing guarded core rather than
+creating a second execution path.
 
-## Start
+## Start in read / preview mode
 
 ```bash
 python -m pip install -e '.[dev]'
 st-music-agent app
 ```
 
-The default address is `http://127.0.0.1:8765`.
+Open `http://127.0.0.1:8765`.
 
-For private repository reads, set a GitHub token in the environment variable named by
-`--github-token-env` (default: `GITHUB_TOKEN`). The token value is resolved only by the existing
-read adapter and is never rendered into the UI.
+This mode can read project evidence, build the independently verified portfolio plan, and preview a
+bounded engineering task. It cannot create branches or write files.
 
-## What the console does
+## Start guarded feature-branch execution
 
-The console reads the current bounded evidence for:
+Write mode is opt-in and loopback-only:
+
+```bash
+st-music-agent app \
+  --enable-writes \
+  --provider-base-url https://YOUR_PROVIDER/v1 \
+  --provider-model YOUR_MODEL \
+  --provider-api-key-env PROVIDER_API_KEY \
+  --github-token-env GITHUB_TOKEN
+```
+
+The CLI arguments contain environment-variable **names**, not credential values. Provider and GitHub
+tokens are resolved only at trusted adapter boundaries and are never returned to the browser.
+
+APP2 refuses write mode when the HTTP server is bound to a non-loopback host.
+
+## Project and planning surface
+
+The console reads bounded evidence for:
 
 - Score Restore;
 - MusicXML → Guitar TAB;
 - Score Editor;
 - Real-Time Score Following.
 
-It renders each project state, summary, warnings and next safe boundary. One repository/evidence
-failure is isolated to that project's card so the rest of the console remains usable.
+Each card shows state, summary, warnings and next safe boundary. A failure in one repository is
+isolated to that card.
 
-The **Doğrulanmış plan oluştur** action collects all four snapshots again and runs the existing
-`PortfolioPlanningService`. The result must pass independent deterministic recomputation before it
-is shown as a verified plan.
+**Doğrulanmış plan oluştur** runs the existing `PortfolioPlanningService`; a plan is shown as
+verified only after deterministic independent recomputation passes.
+
+## Guarded task flow
+
+```text
+user instruction
+  -> task preview
+  -> exact project repository + protected base SHA
+  -> deterministic st-agent/<project>/<task> feature branch
+  -> AutonomyPolicy check
+  -> explicit user click: run
+  -> host creates exact feature branch
+  -> model receives bounded repository read tools
+  -> model receives task.write_file bound to that exact feature branch
+  -> branch head + workflow evidence collected
+  -> explicit user click: open PR
+  -> exact one-action human approval
+  -> PR only
+```
+
+The model never receives `github.create_branch`, `github.open_pull_request`, merge, deploy,
+training, activation, canonicalization or rollback tools during APP2 execution.
+
+`task.write_file` has no `branch` argument. The host injects the previewed feature branch, so a model
+cannot redirect a write to `main`, `master`, or another branch.
+
+## Repository inspection
+
+APP2 adds a task-only `github.tree` projection. It:
+
+- resolves the requested branch to an exact 40-character commit SHA;
+- requests the recursive Git tree;
+- fails closed when GitHub reports truncation;
+- exposes only blob/file entries;
+- filters credential-sensitive paths using the existing read safety checks;
+- fails closed above 2,000 safe file entries.
+
+The agent then reads only the files it needs with `github.read_file`.
 
 ## HTTP surface
 
-- `GET /` — operator UI;
-- `GET /api/health` — application status and safety mode;
-- `GET /api/capabilities` — explicit read/write capability summary;
-- `GET /api/projects?ref=main` — four project cards with isolated availability;
-- `GET /api/projects/<project>?ref=main` — one project snapshot;
-- `GET /api/plan?ref=main` — fresh deterministic plan + verifier report.
+Read routes:
 
-All non-GET methods currently fail closed with `405`.
+- `GET /`
+- `GET /api/health`
+- `GET /api/session`
+- `GET /api/capabilities`
+- `GET /api/projects?ref=main`
+- `GET /api/projects/<project>?ref=main`
+- `GET /api/plan?ref=main`
+- `GET /api/tasks/status/<task-id>`
+
+Task routes:
+
+- `POST /api/tasks/preview`
+- `POST /api/tasks/run`
+- `POST /api/tasks/open-pr`
+
+Every task POST requires the per-process `X-ST-Session` token and a bounded JSON body. There is no
+merge endpoint.
 
 ## Safety boundary
 
-APP1 is not a fake execution UI. It does not expose a button that claims to run work when no bounded
-execution contract is connected. It deliberately keeps:
+APP2 widens only reversible development capability:
 
-- `execution_authorized=false`;
-- feature-branch task execution disabled;
-- protected-branch mutation disabled;
-- training/deployment/canonicalization/rollback execution disabled.
+- feature-branch creation: policy must be `auto_execute`;
+- feature-branch file writes: policy must be `auto_execute`;
+- PR opening: policy must remain `require_human` and requires a separate UI click;
+- protected-branch mutation: unavailable;
+- merge: unavailable;
+- delete/destructive operations: unavailable to the model;
+- deployment/training/activation/canonicalization/rollback: unavailable.
 
-The next application boundary is to connect the already-existing guarded feature-branch execution
-plane to an explicit task request/preview/approval UI without widening production authority.
+A successful APP2 run is development evidence, not production authority.
