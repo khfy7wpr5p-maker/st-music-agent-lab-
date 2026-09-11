@@ -3,9 +3,12 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
+
+from .agent_tools import ToolRegistry
 
 EVALUATION_SCHEMA_VERSION = "1.0.0"
 EVALUATION_POLICY_VERSION = "2026-09-11.v1"
@@ -84,9 +87,17 @@ class BenchmarkRun:
     def fingerprint(self) -> str:
         payload = {
             "candidate_id": self.candidate_id,
-            "results": [result.as_dict() for result in sorted(self.results, key=lambda item: item.case_id)],
+            "results": [
+                result.as_dict()
+                for result in sorted(self.results, key=lambda item: item.case_id)
+            ],
         }
-        encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), allow_nan=False)
+        encoded = json.dumps(
+            payload,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        )
         return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
@@ -149,14 +160,20 @@ class LearningEvaluationGate:
     def __init__(self, policy: LearningEvaluationPolicy | None = None) -> None:
         self.policy = policy or LearningEvaluationPolicy()
 
-    def compare(self, baseline: BenchmarkRun, candidate: BenchmarkRun) -> LearningEvaluationReport:
+    def compare(
+        self,
+        baseline: BenchmarkRun,
+        candidate: BenchmarkRun,
+    ) -> LearningEvaluationReport:
         if baseline.candidate_id == candidate.candidate_id:
             raise LearningEvaluationError("baseline and candidate ids must differ")
 
         baseline_map = baseline.result_map()
         candidate_map = candidate.result_map()
         if set(baseline_map) != set(candidate_map):
-            raise LearningEvaluationError("baseline and candidate must cover the exact same cases")
+            raise LearningEvaluationError(
+                "baseline and candidate must cover the exact same cases"
+            )
 
         ordered_ids = tuple(sorted(baseline_map))
         if len(ordered_ids) < self.policy.minimum_cases:
@@ -176,7 +193,9 @@ class LearningEvaluationGate:
             if baseline_map[case_id].severity is BenchmarkSeverity.CRITICAL
         )
         if len(critical_cases) < self.policy.minimum_critical_cases:
-            raise LearningEvaluationError("benchmark does not meet minimum critical case count")
+            raise LearningEvaluationError(
+                "benchmark does not meet minimum critical case count"
+            )
 
         improved: list[str] = []
         regressed: list[str] = []
@@ -238,3 +257,30 @@ class LearningEvaluationGate:
             "critical_failure_allowed": False,
             "auto_promote": False,
         }
+
+
+class LearningEvaluationReadToolset:
+    """Read-only model surface describing the host-side evaluation gate."""
+
+    def __init__(self, gate: LearningEvaluationGate | None = None) -> None:
+        self.gate = gate or LearningEvaluationGate()
+
+    def register_into(self, registry: ToolRegistry) -> None:
+        registry.register(
+            "learning.evaluation.policy",
+            self._policy,
+            description=(
+                "Read the current paired benchmark gate. This tool cannot submit benchmark "
+                "results, approve candidates or promote models/playbooks."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {},
+                "additionalProperties": False,
+            },
+        )
+
+    def _policy(self, arguments: Mapping[str, Any]) -> Mapping[str, Any]:
+        if arguments:
+            raise ValueError("learning.evaluation.policy accepts no arguments")
+        return self.gate.policy_snapshot()
