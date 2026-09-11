@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import json
 from http.server import ThreadingHTTPServer
 from pathlib import Path
-from typing import Any
 from urllib.parse import urlsplit
 
 from .app3_task_execution import App3TaskService
