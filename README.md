@@ -5,7 +5,7 @@ agents across ST projects.
 
 ## Current stage
 
-A1-A18 guarded agent + evidence + verified learning/evaluation/data foundation:
+A1-A19 guarded agent + evidence + verified learning/evaluation/data/training provenance foundation:
 
 - **A1-A3:** core contracts, model routing and deterministic autonomy policy.
 - **A4-A6:** provider/OpenHands boundaries, guarded workspace and disposable sandbox execution.
@@ -24,6 +24,8 @@ A1-A18 guarded agent + evidence + verified learning/evaluation/data foundation:
   CI and validators in a hash-chained host-only record.
 - **A18:** explicit curated dataset export from selected verified execution records, with training
   and promotion authority kept false.
+- **A19:** reproducible training-run contract binding exact dataset manifest, base model revision,
+  trainer config, seed and code commit to any later checkpoint hash without granting promotion.
 
 ## Model strategy
 
@@ -97,7 +99,21 @@ Every manifest states:
 A `fine_tuning_candidate` export is therefore only a reviewable data artifact, not permission to
 train or promote a model.
 
-See [`docs/execution-and-dataset.md`](docs/execution-and-dataset.md).
+## A19 reproducible training run contract
+
+`TrainingRunContractBuilder` accepts only a verified `fine_tuning_candidate` dataset manifest and
+binds it to an exact base-model id/revision/artifact SHA-256, trainer name/version/config, seed and
+training-code Git commit. Those inputs produce a deterministic `input_fingerprint`.
+
+The spec always keeps `execution_authorized=false` and `auto_start=false`. If a separately
+authorized host later performs training, the completion contract binds that exact fingerprint to a
+host authorization reference, checkpoint SHA-256 and explicit training evidence.
+
+Every completed checkpoint still carries `evaluation_required=true`,
+`promotion_authorized=false` and `auto_promote=false`. It must pass the A16 paired evaluation gate
+before any promotion review.
+
+See [`docs/training-run.md`](docs/training-run.md).
 
 ## Safety boundary
 
@@ -116,6 +132,8 @@ The model never decides its own privilege level.
 - candidate improvement must survive paired benchmark evaluation before host review;
 - benchmark eligibility still never auto-promotes a candidate;
 - curated dataset export never authorizes training or model promotion;
+- a training spec never authorizes or auto-starts training;
+- a trained checkpoint never bypasses independent evaluation or auto-promotes;
 - persistent run/experience/execution evidence is sanitized and hash chained.
 
 ## Development
@@ -129,5 +147,6 @@ pytest
 See [`docs/architecture.md`](docs/architecture.md) for the architecture map,
 [`docs/music-domain-evidence.md`](docs/music-domain-evidence.md) for music evidence,
 [`docs/planning-and-learning.md`](docs/planning-and-learning.md) for A14-A15,
-[`docs/learning-evaluation.md`](docs/learning-evaluation.md) for A16 and
-[`docs/execution-and-dataset.md`](docs/execution-and-dataset.md) for A17-A18.
+[`docs/learning-evaluation.md`](docs/learning-evaluation.md) for A16,
+[`docs/execution-and-dataset.md`](docs/execution-and-dataset.md) for A17-A18 and
+[`docs/training-run.md`](docs/training-run.md) for A19.
