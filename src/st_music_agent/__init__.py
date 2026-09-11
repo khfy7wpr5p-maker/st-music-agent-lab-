@@ -1,5 +1,11 @@
 """ST Music Agent core package."""
 
+from .activation_request import (
+    ACTIVATION_REQUEST_SCHEMA_VERSION,
+    ActivationRequest,
+    ActivationRequestBuilder,
+    ActivationRequestError,
+)
 from .catalog import DEFAULT_MODELS
 from .contracts import ActionRequest, AgentTask, ModelProfile, RiskLevel, TaskKind
 from .dataset_export import (
@@ -67,6 +73,13 @@ from .music_evidence import (
     MusicProject,
 )
 from .music_factory import build_default_music_domain_toolset
+from .orchestration_state import (
+    ORCHESTRATION_STATE_SCHEMA_VERSION,
+    OrchestrationStage,
+    OrchestrationState,
+    OrchestrationStateError,
+    OrchestrationStateStore,
+)
 from .policy import AutonomyDecision, AutonomyPolicy
 from .portfolio_planning import (
     PORTFOLIO_PLAN_SCHEMA_VERSION,
@@ -89,6 +102,7 @@ from .training_run import (
 )
 
 __all__ = [
+    "ACTIVATION_REQUEST_SCHEMA_VERSION",
     "DATASET_EXPORT_SCHEMA_VERSION",
     "DEFAULT_MODELS",
     "EVALUATION_POLICY_VERSION",
@@ -97,11 +111,15 @@ __all__ = [
     "EXPERIENCE_SCHEMA_VERSION",
     "MODEL_CANDIDATE_SCHEMA_VERSION",
     "MUSIC_EVIDENCE_SCHEMA_VERSION",
+    "ORCHESTRATION_STATE_SCHEMA_VERSION",
     "PORTFOLIO_PLAN_SCHEMA_VERSION",
     "PORTFOLIO_POLICY_VERSION",
     "PROMOTION_REVIEW_SCHEMA_VERSION",
     "TRAINING_RUN_SCHEMA_VERSION",
     "ActionRequest",
+    "ActivationRequest",
+    "ActivationRequestBuilder",
+    "ActivationRequestError",
     "AgentTask",
     "AutonomyDecision",
     "AutonomyPolicy",
@@ -147,6 +165,10 @@ __all__ = [
     "MusicEvidenceError",
     "MusicEvidenceSnapshot",
     "MusicProject",
+    "OrchestrationStage",
+    "OrchestrationState",
+    "OrchestrationStateError",
+    "OrchestrationStateStore",
     "PlanVerificationReport",
     "PlanVerificationStatus",
     "PortfolioPlanningService",
