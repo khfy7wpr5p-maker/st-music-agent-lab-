@@ -8,7 +8,7 @@ from enum import IntEnum
 from pathlib import Path
 from typing import Any
 
-from .baseline_registry import BaselineRecord
+from .baseline_registry import BaselineRecord, BaselineRecordKind
 from .drift_watch import (
     DriftObservationWindow,
     DriftWatchGate,
@@ -17,8 +17,15 @@ from .drift_watch import (
     RollbackReviewRequestBuilder,
 )
 from .journal import JournalEvent, RunJournal
+from .rollback_recovery import (
+    PostRollbackRecoveryGate,
+    PostRollbackRecoveryReport,
+    PostRollbackRecoveryRound,
+    RollbackExecutionReceipt,
+    RollbackExecutionReceiptBuilder,
+)
 
-OPERATIONAL_WATCH_STATE_SCHEMA_VERSION = "1.0.0"
+OPERATIONAL_WATCH_STATE_SCHEMA_VERSION = "1.1.0"
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _MODEL_ID = re.compile(r"^model:[0-9a-f]{64}$")
 _WATCH_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$")
@@ -32,12 +39,24 @@ class OperationalWatchStage(IntEnum):
     BASELINE_BOUND = 10
     DRIFT_REVIEWED = 20
     ROLLBACK_REVIEW_REQUESTED = 30
+    ROLLBACK_EXECUTION_RECORDED = 40
+    POST_ROLLBACK_RECOVERY_REVIEWED = 50
+    ROLLBACK_BASELINE_REGISTERED = 60
 
 
 _NEXT_STAGE = {
     None: OperationalWatchStage.BASELINE_BOUND,
     OperationalWatchStage.BASELINE_BOUND: OperationalWatchStage.DRIFT_REVIEWED,
     OperationalWatchStage.DRIFT_REVIEWED: OperationalWatchStage.ROLLBACK_REVIEW_REQUESTED,
+    OperationalWatchStage.ROLLBACK_REVIEW_REQUESTED: (
+        OperationalWatchStage.ROLLBACK_EXECUTION_RECORDED
+    ),
+    OperationalWatchStage.ROLLBACK_EXECUTION_RECORDED: (
+        OperationalWatchStage.POST_ROLLBACK_RECOVERY_REVIEWED
+    ),
+    OperationalWatchStage.POST_ROLLBACK_RECOVERY_REVIEWED: (
+        OperationalWatchStage.ROLLBACK_BASELINE_REGISTERED
+    ),
 }
 
 
@@ -62,6 +81,9 @@ class OperationalWatchState:
     checkpoint_sha256: str
     drift_report_fingerprint: str | None = None
     rollback_review_request_fingerprint: str | None = None
+    rollback_execution_receipt_fingerprint: str | None = None
+    post_rollback_recovery_report_fingerprint: str | None = None
+    rollback_baseline_record_fingerprint: str | None = None
     state_fingerprint: str = ""
 
     def as_dict(self) -> dict[str, Any]:
@@ -75,6 +97,15 @@ class OperationalWatchState:
             "checkpoint_sha256": self.checkpoint_sha256,
             "drift_report_fingerprint": self.drift_report_fingerprint,
             "rollback_review_request_fingerprint": self.rollback_review_request_fingerprint,
+            "rollback_execution_receipt_fingerprint": (
+                self.rollback_execution_receipt_fingerprint
+            ),
+            "post_rollback_recovery_report_fingerprint": (
+                self.post_rollback_recovery_report_fingerprint
+            ),
+            "rollback_baseline_record_fingerprint": (
+                self.rollback_baseline_record_fingerprint
+            ),
             "state_fingerprint": self.state_fingerprint,
         }
 
@@ -141,6 +172,85 @@ class OperationalWatchStateStore:
             rollback_review_request_fingerprint=request.request_fingerprint,
         )
 
+    def record_rollback_execution(
+        self,
+        baseline: BaselineRecord,
+        windows: tuple[DriftObservationWindow, ...],
+        report: DriftWatchReport,
+        request: RollbackReviewRequest,
+        receipt: RollbackExecutionReceipt,
+    ) -> OperationalWatchState:
+        self._require_next(OperationalWatchStage.ROLLBACK_EXECUTION_RECORDED)
+        self._require_same_baseline(baseline)
+        if (
+            self._latest is None
+            or self._latest.rollback_review_request_fingerprint != request.request_fingerprint
+        ):
+            raise OperationalWatchStateError(
+                "rollback receipt does not match recorded rollback request"
+            )
+        RollbackExecutionReceiptBuilder().verify_with_evidence(
+            baseline,
+            windows,
+            report,
+            request,
+            receipt,
+        )
+        return self._advance(
+            OperationalWatchStage.ROLLBACK_EXECUTION_RECORDED,
+            rollback_execution_receipt_fingerprint=receipt.receipt_fingerprint,
+        )
+
+    def record_post_rollback_recovery(
+        self,
+        receipt: RollbackExecutionReceipt,
+        rounds: tuple[PostRollbackRecoveryRound, ...],
+        report: PostRollbackRecoveryReport,
+    ) -> OperationalWatchState:
+        self._require_next(OperationalWatchStage.POST_ROLLBACK_RECOVERY_REVIEWED)
+        if (
+            self._latest is None
+            or self._latest.rollback_execution_receipt_fingerprint != receipt.receipt_fingerprint
+        ):
+            raise OperationalWatchStateError(
+                "recovery report does not match recorded rollback receipt"
+            )
+        PostRollbackRecoveryGate().verify(receipt, rounds, report)
+        return self._advance(
+            OperationalWatchStage.POST_ROLLBACK_RECOVERY_REVIEWED,
+            post_rollback_recovery_report_fingerprint=report.report_fingerprint,
+        )
+
+    def record_rollback_baseline_registration(
+        self,
+        record: BaselineRecord,
+    ) -> OperationalWatchState:
+        self._require_next(OperationalWatchStage.ROLLBACK_BASELINE_REGISTERED)
+        if record.record_kind is not BaselineRecordKind.ROLLBACK:
+            raise OperationalWatchStateError("operational watch requires a rollback registry record")
+        if self._latest is None:
+            raise OperationalWatchStateError("operational watch has not started")
+        if record.environment != self._latest.environment:
+            raise OperationalWatchStateError("rollback registry environment changed")
+        if record.previous_model_id != self._latest.model_id:
+            raise OperationalWatchStateError("rollback registry source model changed")
+        if record.previous_checkpoint_sha256 != self._latest.checkpoint_sha256:
+            raise OperationalWatchStateError("rollback registry source checkpoint changed")
+        if (
+            record.rollback_execution_receipt_fingerprint
+            != self._latest.rollback_execution_receipt_fingerprint
+        ):
+            raise OperationalWatchStateError("rollback registry receipt evidence changed")
+        if (
+            record.recovery_report_fingerprint
+            != self._latest.post_rollback_recovery_report_fingerprint
+        ):
+            raise OperationalWatchStateError("rollback registry recovery evidence changed")
+        return self._advance(
+            OperationalWatchStage.ROLLBACK_BASELINE_REGISTERED,
+            rollback_baseline_record_fingerprint=record.record_fingerprint,
+        )
+
     def latest(self) -> OperationalWatchState | None:
         return self._latest
 
@@ -188,6 +298,9 @@ class OperationalWatchStateStore:
             "checkpoint_sha256",
             "drift_report_fingerprint",
             "rollback_review_request_fingerprint",
+            "rollback_execution_receipt_fingerprint",
+            "post_rollback_recovery_report_fingerprint",
+            "rollback_baseline_record_fingerprint",
         )
         for event in self.journal.read_events():
             if event.event_type != self._EVENT_TYPE:
@@ -226,6 +339,15 @@ class OperationalWatchStateStore:
                 rollback_review_request_fingerprint=self._optional_text(
                     payload.get("rollback_review_request_fingerprint")
                 ),
+                rollback_execution_receipt_fingerprint=self._optional_text(
+                    payload.get("rollback_execution_receipt_fingerprint")
+                ),
+                post_rollback_recovery_report_fingerprint=self._optional_text(
+                    payload.get("post_rollback_recovery_report_fingerprint")
+                ),
+                rollback_baseline_record_fingerprint=self._optional_text(
+                    payload.get("rollback_baseline_record_fingerprint")
+                ),
                 state_fingerprint=str(payload["state_fingerprint"]),
             )
         except (KeyError, ValueError) as exc:
@@ -249,24 +371,36 @@ class OperationalWatchStateStore:
             raise OperationalWatchStateError("operational watch model id is invalid")
         if not _SHA256.fullmatch(state.checkpoint_sha256):
             raise OperationalWatchStateError("operational watch checkpoint is invalid")
-        for value in (
+        fingerprint_fields = (
             state.drift_report_fingerprint,
             state.rollback_review_request_fingerprint,
-        ):
-            if value is not None and not _SHA256.fullmatch(value):
-                raise OperationalWatchStateError("operational watch evidence fingerprint is invalid")
-        if (
-            state.stage >= OperationalWatchStage.DRIFT_REVIEWED
-            and state.drift_report_fingerprint is None
-        ):
-            raise OperationalWatchStateError("drift-reviewed state requires drift report")
-        if (
-            state.stage >= OperationalWatchStage.ROLLBACK_REVIEW_REQUESTED
-            and state.rollback_review_request_fingerprint is None
-        ):
-            raise OperationalWatchStateError(
-                "rollback-review-requested state requires rollback request"
-            )
+            state.rollback_execution_receipt_fingerprint,
+            state.post_rollback_recovery_report_fingerprint,
+            state.rollback_baseline_record_fingerprint,
+        )
+        if any(value is not None and not _SHA256.fullmatch(value) for value in fingerprint_fields):
+            raise OperationalWatchStateError("operational watch evidence fingerprint is invalid")
+
+        required_by_stage = {
+            OperationalWatchStage.DRIFT_REVIEWED: "drift_report_fingerprint",
+            OperationalWatchStage.ROLLBACK_REVIEW_REQUESTED: (
+                "rollback_review_request_fingerprint"
+            ),
+            OperationalWatchStage.ROLLBACK_EXECUTION_RECORDED: (
+                "rollback_execution_receipt_fingerprint"
+            ),
+            OperationalWatchStage.POST_ROLLBACK_RECOVERY_REVIEWED: (
+                "post_rollback_recovery_report_fingerprint"
+            ),
+            OperationalWatchStage.ROLLBACK_BASELINE_REGISTERED: (
+                "rollback_baseline_record_fingerprint"
+            ),
+        }
+        for checkpoint_stage, field in required_by_stage.items():
+            if state.stage >= checkpoint_stage and getattr(state, field) is None:
+                raise OperationalWatchStateError(
+                    f"operational watch stage requires evidence field: {field}"
+                )
 
         base = state.as_dict()
         fingerprint = base.pop("state_fingerprint")
