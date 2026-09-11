@@ -1,6 +1,6 @@
 # ST Music Agent Lab — Architecture Map
 
-Status: A1-A10 guarded agent foundation
+Status: A1-A11 guarded agent foundation
 Date: 2026-09-11
 
 ## Purpose
@@ -32,8 +32,6 @@ long-context profile and Kimi-K2.5 for multimodal/score-image work.
 - `credentials.py`: secrets resolved only at adapter boundaries.
 - `transport.py`: HTTP/HTTPS-only JSON transport with sanitized errors.
 - `openhands.py`: public OpenHands Agent Server REST adapter.
-
-Raw OpenHands terminal/editor tools are not exposed.
 
 ## A5 — Guarded workspace
 
@@ -70,67 +68,74 @@ pull requests and workflow status. Common credential/key paths are denied before
 ## A9 — Policy-aware GitHub mutations
 
 `github_write.py` adds remote mutation support without turning GitHub into an unrestricted model
-capability.
-
-Model-callable mutation surface:
-
-- `github.create_branch` from an exact commit SHA;
-- `github.write_file` for one bounded non-sensitive UTF-8 file.
-
-These are reversible writes. Feature-branch operations may auto-execute; `main`/`master` targets
-are stopped before credential resolution/network access unless an exact host-side approval is
-supplied. File deletion is `DESTRUCTIVE`; pull-request creation is an
-`EXTERNAL_SIDE_EFFECT`; both exist only as host-side adapter paths and are not registered in the
-model toolset. Merge remains absent.
-
-Branch refs reject protected aliases/unsafe forms such as `HEAD`, `refs/*`, `heads/*`, hidden
-segments and `.lock` segments. File paths reject traversal, backslashes, empty segments and
-credential-sensitive locations.
+capability. Model-callable mutations are limited to `github.create_branch` and
+`github.write_file`; both are reversible writes. Feature-branch operations may auto-execute,
+while `main`/`master` targets stop before credential resolution/network access unless an exact
+host-side approval is supplied. File deletion and PR creation remain host-only gated operations;
+merge remains absent.
 
 ## A10 — Cumulative run budgets and host approval broker
 
-A10 adds two generic control planes above individual tools.
+`run_budget.py` enforces per-run monotonic elapsed time, model-turn count, tool-call count and
+serialized model-facing byte limits. `tool_loop.py` charges these budgets before provider/tool
+work to prevent partial execution after overflow.
 
-### Run budget tracker
+`approval_broker.py` provides opaque one-shot host approval tickets. A ticket binds exactly one
+action name and target, can be approved/denied only by host code, and yields the existing
+`ActionApproval` only once after exact-match verification. The broker is never a model tool.
 
-`run_budget.py` defines `RunBudgetPolicy`, `RunBudgetTracker`, `RunBudgetSnapshot` and a
-fail-closed `RunBudgetExceeded` boundary.
+## A11 — OpenHands-to-ST restricted bridge
 
-Each tool-loop run can now limit cumulatively:
+A11 connects OpenHands Agent Server to the ST-owned tool boundary without exposing raw OpenHands
+terminal/editor capability.
 
-- elapsed monotonic wall-clock time;
-- model turns;
-- tool calls;
-- serialized UTF-8 bytes sent to the model, including replayed conversation history and tool
-  definitions on every provider call.
+### OpenHands MCP contract
 
-`tool_loop.py` creates a new tracker for each run. Budget is charged before provider/tool work so
-an overflow does not partially execute the next batch. Elapsed time is checked again after a
-provider response and around tool dispatch. Successful results include a budget snapshot, and
-completed-run journal evidence records the aggregate model-turn/tool-call/byte counts.
+Current OpenHands SDK uses a flat `mcp_config: dict[str, MCPServer]` server map. Remote MCP
+servers may use `streamable-http`, and OpenHands applies `filter_tools_regex` after built-in and
+MCP tools are combined. A bridged ST conversation therefore uses:
 
-The existing per-call protocol limits remain separate from cumulative run budgets: maximum tool
-argument size, tool-name size and call-ID size still apply before dispatch.
+- `agent.tools = []` — no `TerminalTool`, `FileEditorTool` or arbitrary SDK tool module;
+- one fixed MCP server entry named `st_tools`;
+- `transport = streamable-http`;
+- safe default built-ins only: `FinishTool` and `ThinkTool`;
+- an exact anchored allowlist regex containing only `finish`, `think` and names derived from the
+  actual ST `ToolRegistry` manifest.
 
-### Host approval broker
+`openhands.py` validates the configured bridge endpoint. Non-loopback HTTP is rejected; remote
+bridge URLs must use HTTPS. User-info and fragments are rejected. Optional bearer credentials are
+resolved from an environment variable only while the trusted host builds the Agent Server request.
 
-`approval_broker.py` defines `HostApprovalBroker` and one-shot `ApprovalTicket` objects.
+The ST registry is validated before conversation startup. An empty registry fails closed, MCP
+incompatible tool names fail closed and registry names `finish`/`think` are rejected to prevent
+collision with the safe OpenHands built-ins.
 
-- ticket IDs are cryptographically random opaque values generated by host code;
-- a ticket binds exactly one action name and target;
-- pending tickets can be approved or denied only through host methods;
-- an approved ticket must match the exact `ActionRequest` when consumed;
-- successful consumption emits the existing exact-match `ActionApproval` and permanently marks
-  the ticket consumed;
-- denied/consumed tickets cannot be reused;
-- the broker is not registered as a model tool, so model arguments cannot manufacture approval.
+### ST bridge core
 
-This gives a future UI/server a pause -> human decision -> resume path without weakening A3's
-deterministic action policy.
+`openhands_bridge.py` defines `STToolBridge` as a protocol-neutral core suitable for a host MCP
+sidecar:
+
+- tool discovery is projected only from `ToolRegistry.provider_tools()` into MCP-style
+  `name` / `description` / `inputSchema` records;
+- tool names must match the bounded MCP-compatible ST naming subset;
+- input schemas must be object schemas;
+- each invocation receives a host-generated opaque call ID and is dispatched only through
+  `ToolRegistry`;
+- unknown tool names are rejected by the registry rather than dynamically imported/resolved;
+- tool arguments must be canonical JSON objects and are bounded by UTF-8 byte size;
+- bridge elapsed/tool-call budgets fail closed before extra dispatch;
+- results remain subject to A7 registry sanitization and can be projected to MCP `content`,
+  `structuredContent` and `isError` fields.
+
+A11 intentionally does **not** start an HTTP MCP server inside the library. The network listener,
+TLS termination and deployment lifecycle remain host concerns; the library supplies the
+validated OpenHands configuration and ST dispatch core. This keeps network privilege out of the
+agent package while establishing the exact interoperability boundary.
 
 ## Current flow
 
 ```text
+Direct provider path:
 AgentTask -> ModelRouter -> OpenAICompatibleClient
                           ^
                           |
@@ -143,46 +148,39 @@ AgentTask -> ModelRouter -> OpenAICompatibleClient
                           v
                        ToolRegistry
                           |
-          +---------------+------------------+
-          |                                  |
-  GitHubReadToolset                 GitHubMutationToolset
-      read-only                    reversible subset
-          |                       /               \
-          |                create branch       write file
-          +---------------------+------------------+
-                                |
-                                v
-                          ActionRequest
-                                |
-                                v
-                          AutonomyPolicy
-                         /      |       \
-                      auto     gate      deny
-                       |        |
-                       |        +--> HostApprovalBroker
-                       |              pending -> human -> one-shot approval
-                       v
-              GitHub / guarded local tools
+                ST policy-aware tools
 
-Host-only mutation paths:
-delete file -> DESTRUCTIVE -> human approval
-open PR     -> EXTERNAL_SIDE_EFFECT -> human approval
-merge       -> not implemented/exposed
+OpenHands path:
+OpenHands Agent Server
+        |
+        | tools=[]
+        | include defaults: finish / think only
+        | one MCP server: st_tools
+        | exact filter_tools_regex
+        v
+Host Streamable-HTTP MCP sidecar
+        |
+        v
+STToolBridge -> ToolRegistry -> AutonomyPolicy -> GitHub / guarded local tools
+      |              |
+      |              +-> HostApprovalBroker for gated host actions
+      +-> bridge call/time budget
 
 Executable local code -> GuardedCommandRunner -> SandboxBackend -> disposable Docker
 Tool evidence -> sanitized RunJournal -> SHA-256 hash chain
-OpenHands adapter -> Agent Server; raw Terminal/FileEditor remain disabled
 ```
 
-## A11 continuation
+## A12 continuation
 
-1. Build an explicit OpenHands-to-ST bridge that advertises only `ToolRegistry` definitions and
-   maps external tool requests back through ST budgets/policy rather than raw terminal/editor.
-2. Add fake/local GitHub API integration fixtures covering complete read -> branch -> write ->
-   human-gated PR flows.
-3. Add resumable orchestration state linking run journal, budget snapshot and approval tickets
-   without persisting provider hidden reasoning.
-4. Begin music-domain tool/evidence contracts for Score Restore, MusicXML/TAB, Score Editor and
+1. Implement a deployable Streamable HTTP MCP sidecar around `STToolBridge`, with authenticated
+   startup, protocol-version negotiation and no ambient host privileges.
+2. Add end-to-end OpenHands Agent Server integration tests against that sidecar, verifying that
+   `terminal`/`file_editor` cannot appear or execute.
+3. Add fake/local GitHub API integration fixtures covering read -> branch -> write -> human-gated
+   PR flows.
+4. Add resumable orchestration state linking journal, budget snapshot and approval tickets without
+   persisting provider hidden reasoning.
+5. Begin music-domain tool/evidence contracts for Score Restore, MusicXML/TAB, Score Editor and
    real-time score following.
 
 ## Architectural invariants
@@ -205,6 +203,8 @@ OpenHands adapter -> Agent Server; raw Terminal/FileEditor remain disabled
 16. Delete/PR/merge authority is never silently inherited by a model toolset.
 17. A run cannot silently exceed cumulative time/turn/tool/byte limits.
 18. Approval artifacts are host-generated, exact-match and one-shot.
-19. External agent frameworks cannot bypass ST policy, budget or isolation.
-20. Music-specific intelligence remains above generic execution infrastructure.
-21. Tests define safety behavior before capability is widened.
+19. OpenHands raw terminal/editor tools are absent from the bridged agent configuration.
+20. OpenHands MCP discovery is filtered to the concrete ST registry manifest plus finish/think.
+21. External agent frameworks cannot bypass ST policy, budget or isolation.
+22. Music-specific intelligence remains above generic execution infrastructure.
+23. Tests define safety behavior before capability is widened.

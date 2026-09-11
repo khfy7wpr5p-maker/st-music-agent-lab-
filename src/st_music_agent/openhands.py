@@ -1,14 +1,49 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import urlsplit
 
+from .agent_tools import ToolRegistry
 from .credentials import EnvCredential
+from .openhands_bridge import STToolBridge
 from .transport import JsonRequest, JsonTransport, UrllibJsonTransport
 
 
 class OpenHandsResponseError(RuntimeError):
     pass
+
+
+@dataclass(frozen=True, slots=True)
+class OpenHandsSTBridgeConfig:
+    url: str
+    bearer_token_env: str | None = None
+    timeout_seconds: float = 60.0
+
+    def __post_init__(self) -> None:
+        parsed = urlsplit(self.url)
+        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+            raise ValueError("ST bridge URL must be an absolute HTTP/HTTPS URL")
+        if parsed.username is not None or parsed.password is not None or parsed.fragment:
+            raise ValueError("ST bridge URL must not contain user-info or fragments")
+        if parsed.scheme == "http" and parsed.hostname not in {"localhost", "127.0.0.1", "::1"}:
+            raise ValueError("non-loopback ST bridge URLs must use HTTPS")
+        if self.bearer_token_env is not None and not self.bearer_token_env.strip():
+            raise ValueError("bearer_token_env must not be empty when provided")
+        if self.timeout_seconds <= 0 or self.timeout_seconds > 300:
+            raise ValueError("ST bridge timeout must be > 0 and <= 300 seconds")
+
+    def as_mcp_server(self) -> dict[str, Any]:
+        server: dict[str, Any] = {
+            "url": self.url,
+            "transport": "streamable-http",
+            "timeout": self.timeout_seconds,
+        }
+        if self.bearer_token_env:
+            token = EnvCredential(self.bearer_token_env).resolve()
+            server["headers"] = {"Authorization": f"Bearer {token}"}
+        return server
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,6 +78,39 @@ class OpenHandsAgentServerClient:
         self._transport = transport or UrllibJsonTransport()
 
     def start_conversation(self, instruction: str) -> OpenHandsConversation:
+        """Start the legacy reasoning-only conversation with no external tools."""
+        return self._start(instruction, agent_overrides={})
+
+    def start_st_bridged_conversation(
+        self,
+        instruction: str,
+        bridge: OpenHandsSTBridgeConfig,
+        registry: ToolRegistry,
+    ) -> OpenHandsConversation:
+        """Start OpenHands with only ST-registry MCP tools plus safe finish/think built-ins."""
+        manifest = STToolBridge(registry).list_tools()
+        tool_names = tuple(tool["name"] for tool in manifest)
+        if not tool_names:
+            raise ValueError("ST bridge registry must expose at least one tool")
+        reserved = {"finish", "think"}.intersection(tool_names)
+        if reserved:
+            raise ValueError("ST bridge registry collides with reserved OpenHands tools")
+
+        allowed = ("finish", "think", *tool_names)
+        filter_regex = "^(?:" + "|".join(re.escape(name) for name in allowed) + ")$"
+        overrides = {
+            "mcp_config": {"st_tools": bridge.as_mcp_server()},
+            "filter_tools_regex": filter_regex,
+            "include_default_tools": ["FinishTool", "ThinkTool"],
+        }
+        return self._start(instruction, agent_overrides=overrides)
+
+    def _start(
+        self,
+        instruction: str,
+        *,
+        agent_overrides: dict[str, Any],
+    ) -> OpenHandsConversation:
         if not instruction.strip():
             raise ValueError("instruction must not be empty")
 
@@ -52,8 +120,10 @@ class OpenHandsAgentServerClient:
         if self._config.llm_base_url:
             llm["base_url"] = self._config.llm_base_url
 
+        agent: dict[str, Any] = {"kind": "Agent", "llm": llm, "tools": []}
+        agent.update(agent_overrides)
         payload: dict[str, Any] = {
-            "agent": {"kind": "Agent", "llm": llm, "tools": []},
+            "agent": agent,
             "workspace": {"working_dir": self._config.working_dir},
             "initial_message": {
                 "role": "user",
