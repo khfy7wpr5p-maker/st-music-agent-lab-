@@ -255,14 +255,18 @@ class OperationalWatchStateStore:
         ):
             if value is not None and not _SHA256.fullmatch(value):
                 raise OperationalWatchStateError("operational watch evidence fingerprint is invalid")
-        if state.stage >= OperationalWatchStage.DRIFT_REVIEWED:
-            if state.drift_report_fingerprint is None:
-                raise OperationalWatchStateError("drift-reviewed state requires drift report")
-        if state.stage >= OperationalWatchStage.ROLLBACK_REVIEW_REQUESTED:
-            if state.rollback_review_request_fingerprint is None:
-                raise OperationalWatchStateError(
-                    "rollback-review-requested state requires rollback request"
-                )
+        if (
+            state.stage >= OperationalWatchStage.DRIFT_REVIEWED
+            and state.drift_report_fingerprint is None
+        ):
+            raise OperationalWatchStateError("drift-reviewed state requires drift report")
+        if (
+            state.stage >= OperationalWatchStage.ROLLBACK_REVIEW_REQUESTED
+            and state.rollback_review_request_fingerprint is None
+        ):
+            raise OperationalWatchStateError(
+                "rollback-review-requested state requires rollback request"
+            )
 
         base = state.as_dict()
         fingerprint = base.pop("state_fingerprint")
