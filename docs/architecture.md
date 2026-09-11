@@ -1,6 +1,6 @@
 # ST Music Agent Lab — Architecture Map
 
-Status: A1-A23 guarded agent + verified planning/learning/evaluation/data/training/model-runtime/canonical-baseline foundation
+Status: A1-A24 guarded agent + verified planning/learning/evaluation/data/training/model-runtime/canonical-baseline-stability foundation
 Date: 2026-09-11
 
 ## Purpose
@@ -8,8 +8,8 @@ Date: 2026-09-11
 ST Music Agent Lab is a model-agnostic engineering and music-intelligence agent layer. Models,
 OpenHands, GitHub and ST music projects attach through explicit adapters while ST-owned policy,
 tool, budget, approval, evidence, verification, learning, evaluation, execution, dataset,
-training, model-candidate, orchestration, activation and canonical-baseline boundaries remain
-authoritative.
+training, model-candidate, orchestration, activation, canonical-baseline and stable-baseline
+registry boundaries remain authoritative.
 
 ## A1-A11 — Guarded execution
 
@@ -83,6 +83,37 @@ candidate and sets `post_canonical_health_required=true`.
 
 Automatic canonicalization and automatic rollback remain false.
 
+## A24 — Post-canonical stability + Baseline Registry
+
+A24 does not treat a successful A23 canonicalization as a stable endpoint. The
+`PostCanonicalStabilityGate` requires at least three ordered observation rounds. Each round must
+contain the exact evidence-bearing checks:
+
+- `serving_identity`;
+- `health`;
+- `quality`;
+- `rollback_readiness`.
+
+Observation references must be unique, sequences must be contiguous from one, and the observed
+model/checkpoint must equal the canonicalized candidate exactly. Any failed or unavailable check,
+wrong identity, missing check or altered report rejects stability.
+
+A pass yields only `eligible_for_baseline_registration` and preserves:
+
+- `host_registration_required=true`;
+- `auto_register_baseline=false`;
+- `auto_rollback=false`.
+
+`BaselineRegistry` is an append-only SHA-256 hash-chained host record for one environment. It must
+be explicitly bootstrapped with the already-existing canonical model. A later generation can be
+appended only when the exact A23 receipt and A24 stability report recompute successfully and the
+registry's current model/checkpoint equal the A23 previous canonical baseline and rollback target.
+
+Each transition records exact new/previous/rollback model identities, checkpoints,
+canonicalization receipt fingerprint, stability report fingerprint, host registration reference
+and supporting evidence. The registry records state only; it cannot deploy, switch or roll back a
+model.
+
 ## Resumable lifecycle
 
 ```text
@@ -103,31 +134,34 @@ music evidence
   -> canonical baseline review
   -> separately authorized canonicalization
   -> canonicalization receipt
+  -> repeated post-canonical stability evidence
+  -> append-only baseline registry
 ```
 
 `OrchestrationStateStore` records structured fingerprints through:
 
 `plan_verified -> execution_verified -> dataset_curated -> training_completed -> model_registered
 -> promotion_reviewed -> activation_requested -> activation_recorded -> shadow_health_reviewed
--> canonical_reviewed -> canonicalization_recorded`
+-> canonical_reviewed -> canonicalization_recorded -> post_canonical_stability_reviewed
+-> baseline_registered`
 
 Stage skipping, stage regression and silent replacement of prior evidence fail closed.
 
-## A24 continuation
+## A25 continuation
 
-1. Add post-canonical health/stability evidence after a successful A23 canonicalization.
-2. Add an immutable baseline-registry snapshot binding the new canonical model to the superseded
-   baseline and rollback history.
-3. Require sustained post-canonical evidence before the new baseline becomes the unquestioned
-   reference for subsequent learning/training cycles.
-4. Keep serving credentials, actual model switches and rollback execution outside model-callable
+1. Add explicit drift/regression watch evidence for already-registered canonical baselines.
+2. Define a host-reviewed rollback-request contract tied to Baseline Registry lineage without
+   adding an automatic rollback executor.
+3. Preserve historical baseline generations so rollback targets never depend on chat memory.
+4. Allow planner/verifier to read stable baseline lineage as bounded evidence, not as deployment
+   authority.
+5. Keep serving credentials, actual model switches and rollback execution outside model-callable
    tools.
-5. Preserve human/host gates for production-impacting canonical changes.
 
 ## Architectural invariants
 
-1. Models cannot grant themselves privileges, approvals, training, promotion, activation or
-   canonicalization.
+1. Models cannot grant themselves privileges, approvals, training, promotion, activation,
+   canonicalization or rollback authority.
 2. Unknown/unregistered tools never execute.
 3. External frameworks cannot bypass ST policy, budget, approval or isolation boundaries.
 4. Music evidence remains source-provenanced and authority-bounded.
@@ -142,5 +176,8 @@ Stage skipping, stage regression and silent replacement of prior evidence fail c
 13. Runtime-health evidence is required before canonical review.
 14. Canonical review independently rechecks A22 evidence and current-baseline identity.
 15. Canonicalization receipt requires separate host authorization and exact observed baseline.
-16. Automatic canonicalization and automatic rollback remain disabled.
-17. Tests define safety behavior before capability is widened.
+16. Post-canonical stability requires repeated exact-identity health evidence before registry
+    recording.
+17. Baseline Registry lineage is append-only and cannot switch or roll back serving state.
+18. Automatic canonicalization, baseline switching and rollback remain disabled.
+19. Tests define safety behavior before capability is widened.

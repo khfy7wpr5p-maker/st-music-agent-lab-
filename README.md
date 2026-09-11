@@ -5,8 +5,8 @@ agents across ST projects.
 
 ## Current stage
 
-A1-A23 guarded agent + verified evidence/learning/training/model-runtime/canonical-baseline
-foundation:
+A1-A24 guarded agent + verified evidence/learning/training/model-runtime/canonical-baseline
+stability foundation:
 
 - **A1-A11:** guarded execution, deterministic privilege policy, budgets, approvals, sandboxing,
   bounded GitHub mutation and restricted OpenHands integration.
@@ -22,8 +22,10 @@ foundation:
   evidence before canonical review.
 - **A23:** canonical baseline review that recomputes A22 evidence, plus separately authorized
   canonicalization receipts binding exact previous/new baseline identities.
+- **A24:** repeated post-canonical stability evidence plus an append-only baseline registry that
+  records exact canonical lineage without granting model-switch or rollback authority.
 
-Package version: `0.21.0`.
+Package version: `0.22.0`.
 
 ## Core safety model
 
@@ -79,17 +81,27 @@ serving identity + health + shadow quality + rollback readiness
 canonical baseline review (A22 evidence recomputed)
         ↓
 separate host canonicalization → canonicalization receipt
+        ↓
+3+ post-canonical stability rounds
+        ↓
+append-only baseline registry
 ```
 
-A successful A23 canonicalization receipt sets `post_canonical_health_required=true`; A23 itself
-does not declare the new baseline permanently healthy or disable rollback.
+A successful A23 canonicalization is not considered a stable lifecycle endpoint by itself. A24
+requires at least three ordered observation rounds, each with serving identity, health, quality and
+rollback-readiness evidence. Only a fully successful recomputation is eligible for host baseline
+registration.
+
+The `BaselineRegistry` must be explicitly bootstrapped with the already-existing canonical model.
+A new generation can then be appended only when the registered predecessor and rollback target
+exactly match the A23 receipt. Registry records are hash-chained and keep `auto_switch=false` and
+`auto_rollback=false`.
 
 ## Resumable evidence state
 
 `OrchestrationStateStore` hash-chains structured fingerprints through the complete lifecycle up to
-`canonicalization_recorded`. Prompts, provider messages and hidden reasoning are not stored as
-lifecycle evidence. Stage skipping, regression and silent replacement of prior evidence fail
-closed.
+`baseline_registered`. Prompts, provider messages and hidden reasoning are not stored as lifecycle
+evidence. Stage skipping, regression and silent replacement of prior evidence fail closed.
 
 ## Development
 
@@ -111,3 +123,4 @@ See:
 - [`docs/orchestration-activation.md`](docs/orchestration-activation.md)
 - [`docs/runtime-activation.md`](docs/runtime-activation.md)
 - [`docs/canonical-baseline.md`](docs/canonical-baseline.md)
+- [`docs/post-canonical-stability.md`](docs/post-canonical-stability.md)

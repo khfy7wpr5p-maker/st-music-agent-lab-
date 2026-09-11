@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "st-music-agent"
-version = "0.21.0"
+version = "0.22.0"
 description = "Model-agnostic orchestration core for ST music engineering agents"
 readme = "README.md"
 requires-python = ">=3.11"

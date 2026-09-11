@@ -13,6 +13,13 @@ from .activation_request import (
     ActivationRequestBuilder,
     ActivationRequestError,
 )
+from .baseline_registry import (
+    BASELINE_REGISTRY_SCHEMA_VERSION,
+    BaselineRecord,
+    BaselineRecordKind,
+    BaselineRegistry,
+    BaselineRegistryError,
+)
 from .canonical_baseline import (
     CANONICAL_REVIEW_SCHEMA_VERSION,
     CANONICALIZATION_RECEIPT_SCHEMA_VERSION,
@@ -109,6 +116,19 @@ from .portfolio_planning import (
     PlanVerificationStatus,
     PortfolioPlanningService,
 )
+from .post_canonical_stability import (
+    POST_CANONICAL_MIN_ROUNDS,
+    POST_CANONICAL_STABILITY_POLICY_VERSION,
+    POST_CANONICAL_STABILITY_SCHEMA_VERSION,
+    PostCanonicalCheck,
+    PostCanonicalCheckKind,
+    PostCanonicalCheckStatus,
+    PostCanonicalObservationRound,
+    PostCanonicalStabilityDecision,
+    PostCanonicalStabilityError,
+    PostCanonicalStabilityGate,
+    PostCanonicalStabilityReport,
+)
 from .router import ModelRouter
 from .shadow_health import (
     SHADOW_HEALTH_POLICY_VERSION,
@@ -133,6 +153,7 @@ from .training_run import (
 __all__ = [
     "ACTIVATION_RECEIPT_SCHEMA_VERSION",
     "ACTIVATION_REQUEST_SCHEMA_VERSION",
+    "BASELINE_REGISTRY_SCHEMA_VERSION",
     "CANONICALIZATION_RECEIPT_SCHEMA_VERSION",
     "CANONICAL_REVIEW_SCHEMA_VERSION",
     "DATASET_EXPORT_SCHEMA_VERSION",
@@ -146,6 +167,9 @@ __all__ = [
     "ORCHESTRATION_STATE_SCHEMA_VERSION",
     "PORTFOLIO_PLAN_SCHEMA_VERSION",
     "PORTFOLIO_POLICY_VERSION",
+    "POST_CANONICAL_MIN_ROUNDS",
+    "POST_CANONICAL_STABILITY_POLICY_VERSION",
+    "POST_CANONICAL_STABILITY_SCHEMA_VERSION",
     "PROMOTION_REVIEW_SCHEMA_VERSION",
     "SHADOW_HEALTH_POLICY_VERSION",
     "SHADOW_HEALTH_SCHEMA_VERSION",
@@ -161,6 +185,10 @@ __all__ = [
     "AgentTask",
     "AutonomyDecision",
     "AutonomyPolicy",
+    "BaselineRecord",
+    "BaselineRecordKind",
+    "BaselineRegistry",
+    "BaselineRegistryError",
     "BenchmarkCaseResult",
     "BenchmarkOutcome",
     "BenchmarkRun",
@@ -217,6 +245,14 @@ __all__ = [
     "PlanVerificationReport",
     "PlanVerificationStatus",
     "PortfolioPlanningService",
+    "PostCanonicalCheck",
+    "PostCanonicalCheckKind",
+    "PostCanonicalCheckStatus",
+    "PostCanonicalObservationRound",
+    "PostCanonicalStabilityDecision",
+    "PostCanonicalStabilityError",
+    "PostCanonicalStabilityGate",
+    "PostCanonicalStabilityReport",
     "PromotionDecision",
     "PromotionReviewDecision",
     "PromotionReviewRecord",
