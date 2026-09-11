@@ -210,7 +210,7 @@ class FullMusicDomainToolset(MusicDomainToolset):
     score_following: ScoreFollowingEvidenceAdapter
 
     def register_into(self, registry: ToolRegistry) -> None:
-        super().register_into(registry)
+        MusicDomainToolset.register_into(self, registry)
         registry.register(
             "music.score_editor.snapshot",
             self._score_editor_snapshot,
