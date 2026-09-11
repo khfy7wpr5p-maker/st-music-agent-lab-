@@ -5,7 +5,7 @@ agents across ST projects.
 
 ## Current stage
 
-A1-A19 guarded agent + evidence + verified learning/evaluation/data/training provenance foundation:
+A1-A20 guarded agent + evidence + verified learning/evaluation/data/training/model-candidate foundation:
 
 - **A1-A3:** core contracts, model routing and deterministic autonomy policy.
 - **A4-A6:** provider/OpenHands boundaries, guarded workspace and disposable sandbox execution.
@@ -26,6 +26,8 @@ A1-A19 guarded agent + evidence + verified learning/evaluation/data/training pro
   and promotion authority kept false.
 - **A19:** reproducible training-run contract binding exact dataset manifest, base model revision,
   trainer config, seed and code commit to any later checkpoint hash without granting promotion.
+- **A20:** immutable model-candidate lineage plus promotion-review recomputation before any
+  activation review; activation remains explicitly unauthorized.
 
 ## Model strategy
 
@@ -113,7 +115,20 @@ Every completed checkpoint still carries `evaluation_required=true`,
 `promotion_authorized=false` and `auto_promote=false`. It must pass the A16 paired evaluation gate
 before any promotion review.
 
-See [`docs/training-run.md`](docs/training-run.md).
+## A20 model candidate and promotion review
+
+`ModelCandidateRegistry` turns only a verified completed A19 training lineage into a deterministic
+model candidate id. The candidate keeps its checkpoint SHA-256, dataset/base-model lineage and
+training fingerprints, while `activation_authorized=false` and `auto_activate=false` remain fixed.
+
+`ModelPromotionReviewGate` receives the registered candidate, the current baseline benchmark run,
+the candidate benchmark run and the claimed A16 report. It recomputes A16 itself and rejects any
+report that differs from that recomputation.
+
+A passing candidate can become only `eligible_for_activation_review`. The result still states
+`human_review_required=true`, `activation_authorized=false` and `auto_activate=false`.
+
+See [`docs/model-candidate-promotion.md`](docs/model-candidate-promotion.md).
 
 ## Safety boundary
 
@@ -134,6 +149,8 @@ The model never decides its own privilege level.
 - curated dataset export never authorizes training or model promotion;
 - a training spec never authorizes or auto-starts training;
 - a trained checkpoint never bypasses independent evaluation or auto-promotes;
+- a model candidate never activates itself;
+- promotion review independently recomputes A16 and never grants activation authority;
 - persistent run/experience/execution evidence is sanitized and hash chained.
 
 ## Development
@@ -148,5 +165,6 @@ See [`docs/architecture.md`](docs/architecture.md) for the architecture map,
 [`docs/music-domain-evidence.md`](docs/music-domain-evidence.md) for music evidence,
 [`docs/planning-and-learning.md`](docs/planning-and-learning.md) for A14-A15,
 [`docs/learning-evaluation.md`](docs/learning-evaluation.md) for A16,
-[`docs/execution-and-dataset.md`](docs/execution-and-dataset.md) for A17-A18 and
-[`docs/training-run.md`](docs/training-run.md) for A19.
+[`docs/execution-and-dataset.md`](docs/execution-and-dataset.md) for A17-A18,
+[`docs/training-run.md`](docs/training-run.md) for A19 and
+[`docs/model-candidate-promotion.md`](docs/model-candidate-promotion.md) for A20.

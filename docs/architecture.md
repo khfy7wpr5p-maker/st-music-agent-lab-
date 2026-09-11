@@ -1,6 +1,6 @@
 # ST Music Agent Lab — Architecture Map
 
-Status: A1-A19 guarded agent + verified planning/learning/evaluation/data/training provenance
+Status: A1-A20 guarded agent + verified planning/learning/evaluation/data/training/model-candidate foundation
 Date: 2026-09-11
 
 ## Purpose
@@ -13,8 +13,8 @@ reversible, capability-driven and isolated from the host.
 
 The ST core stays small and framework-independent. Models, OpenHands, GitHub and music projects
 attach through explicit adapters. No external framework may bypass ST-owned policy, tool, budget,
-approval, evidence, verification, learning, evaluation, execution-evidence, dataset, training-run
-or sandbox boundaries.
+approval, evidence, verification, learning, evaluation, execution-evidence, dataset, training-run,
+model-candidate or sandbox boundaries.
 
 ## A1-A6 — Core execution and isolation
 
@@ -99,15 +99,10 @@ Read-only model tool: `learning.evaluation.policy`.
 
 ## A17 — Exact execution outcome evidence
 
-A17 closes the gap between a verified plan and a later success claim.
-
 `ExecutionOutcomeStore` is trusted-host-write-only and hash chained. An `ExecutionObservation`
 must bind to the exact verified plan candidate through plan id, candidate rank, project, exact
 action, candidate evidence hash, expected repository, branch, full commit SHA, CI checks and
 validator checks.
-
-The provided `PlanVerificationReport` must be PASS and its `plan_id` plus
-`recomputed_plan_id` must equal the same plan.
 
 `SUCCESS` requires every CI and validator check to be `success`. `FAILURE` or `ABSTAINED` must
 retain non-green evidence and cannot masquerade as successful execution.
@@ -120,11 +115,8 @@ training or promotion authority.
 `CuratedDatasetBuilder` deterministically exports explicitly selected verified execution record
 IDs for `offline_evaluation` or `fine_tuning_candidate` use.
 
-Rows contain only structured operational facts: project/plan/candidate identity, planned action,
-evidence hash, repository, branch, exact commit SHA, outcome and CI/validator evidence.
-
-Free-form execution notes are excluded. Provider messages, hidden reasoning and chain-of-thought
-are not dataset fields.
+Rows contain only structured operational facts. Free-form execution notes, provider messages,
+hidden reasoning and chain-of-thought are not dataset fields.
 
 Every export contains a manifest SHA-256 and hard-coded authority fields:
 
@@ -132,84 +124,73 @@ Every export contains a manifest SHA-256 and hard-coded authority fields:
 - `auto_train=false`;
 - `auto_promote=false`.
 
-`fine_tuning_candidate` means only that the dataset may later be reviewed by a separately
-authorized training stage.
-
 ## A19 — Reproducible training-run contract
 
-`training_run.py` binds a reviewed `fine_tuning_candidate` dataset to the exact inputs that would
-produce a trained checkpoint.
+`TrainingRunSpec` binds an exact reviewed `fine_tuning_candidate` dataset manifest to base-model
+id/revision/artifact SHA-256, trainer name/version/config, deterministic seed and training-code
+commit. The complete input contract is hashed into one `input_fingerprint`.
 
-`TrainingRunSpec` includes:
+A spec always has `execution_authorized=false` and `auto_start=false`.
 
-- run id;
-- dataset id + verified manifest SHA-256;
-- base-model id + exact revision + base-model artifact SHA-256;
-- trainer name/version;
-- canonical trainer configuration + configuration SHA-256;
-- deterministic seed;
-- training-code repository + full Git commit SHA;
-- deterministic `input_fingerprint` over the complete input contract.
+If a separately authorized host performs training, `TrainingRunCompletion` binds that exact input
+fingerprint to the host authorization reference, checkpoint SHA-256 and training evidence.
+Completed runs always have `evaluation_required=true`, `promotion_authorized=false` and
+`auto_promote=false`.
 
-The dataset manifest is recomputed before a spec is accepted. Offline-evaluation datasets,
-forged manifests or dataset authority flags that claim training/promotion are rejected.
+## A20 — Immutable model candidate + promotion review recomputation
 
-A spec always has:
+`ModelCandidateRegistry` accepts only a verified completed A19 training lineage. It independently
+checks the training spec/config/input fingerprint, completion/run linkage, checkpoint SHA-256,
+completion fingerprint and non-promotion authority flags.
 
-- `execution_authorized=false`;
-- `auto_start=false`.
+The registry derives a deterministic `model:<lineage_sha256>` candidate id from:
 
-If a separately authorized host performs training, `TrainingRunCompletion` binds the same exact
-input fingerprint to:
+- checkpoint SHA-256;
+- training run id;
+- training input/completion fingerprints;
+- dataset id + manifest hash;
+- base-model id/revision/artifact SHA-256.
 
-- explicit host authorization reference;
-- checkpoint SHA-256 for completed runs;
-- explicit training evidence references;
-- deterministic completion fingerprint.
+Every model candidate has `evaluation_required=true`, `activation_authorized=false` and
+`auto_activate=false`.
 
-Completed runs always have:
+`ModelPromotionReviewGate` requires:
 
-- `evaluation_required=true`;
-- `promotion_authorized=false`;
-- `auto_promote=false`.
+- one registered model candidate;
+- current baseline benchmark run;
+- candidate benchmark run whose candidate id matches the registered model;
+- claimed A16 evaluation report.
 
-Failed or abstained runs cannot claim a checkpoint hash. A19 exposes no model-callable training or
-promotion tool.
+The gate reruns `LearningEvaluationGate.compare()` itself. If the claimed report differs from the
+fresh recomputation, review fails closed.
 
-## Current decision/learning/training chain
+A recomputed A16 pass yields only `eligible_for_activation_review`. The review record still has:
+
+- `human_review_required=true`;
+- `activation_authorized=false`;
+- `auto_activate=false`.
+
+A rejected A16 result stays rejected. A20 exposes no activation/deployment tool.
+
+## Current decision/learning/training/promotion chain
 
 ```text
 four project snapshots
         |
         v
-CrossProjectPlanner
-        |
-        v
-CrossProjectVerifier ---- FAIL -> stop
+CrossProjectPlanner -> CrossProjectVerifier
         |
        PASS
         v
 guarded host execution
         |
         v
-exact branch/commit + CI + validators
+exact commit + CI + validators
         |
         v
 ExecutionOutcomeStore
         |
-        +-----------------------> ExperienceStore / Advisor
-        |                                  |
-        |                                  v
-        |                         prefer / observe / review
-        |                                  |
-        |                         paired candidate benchmark
-        |                                  |
-        |                         LearningEvaluationGate
-        |                                  |
-        |                     rejected / eligible for host review
-        |
-        v
-explicit record-id curation
+        +----> ExperienceStore / Advisor ----> candidate playbook evidence
         |
         v
 CuratedDatasetBuilder
@@ -217,35 +198,45 @@ CuratedDatasetBuilder
         v
 fine-tuning-candidate manifest
         |
- training_authorized=false / auto_train=false / auto_promote=false
-        |
         v
 TrainingRunSpec
-(dataset + base model + trainer config + seed + code SHA)
         |
-  execution_authorized=false / auto_start=false
-        |
-        | separate host authorization if training is actually run
+ separate host authorization if training actually runs
         v
 TrainingRunCompletion
-(input fingerprint + checkpoint SHA + training evidence)
-        |
- evaluation_required=true / promotion_authorized=false
         |
         v
-A16 paired checkpoint evaluation before any promotion review
+ModelCandidateRegistry
+        |
+        v
+registered immutable model candidate
+        |
+baseline benchmark <---- same cases ----> candidate benchmark
+        |                                      |
+        +--------- LearningEvaluationGate -----+
+                         |
+             rejected / eligible_for_host_review
+                         |
+                         v
+             ModelPromotionReviewGate
+            (independent recomputation)
+                         |
+        rejected / eligible_for_activation_review
+                         |
+      human_review_required=true
+      activation_authorized=false
+      auto_activate=false
 ```
 
-## A20 continuation
+## A21 continuation
 
-1. Add a checkpoint/model registry that records immutable model candidate identities and lineage
-   from A19 completion evidence.
-2. Bind every model candidate to its required A16 evaluation report and current baseline identity.
-3. Add an explicit promotion-review contract that can only reference a non-regressing evaluated
-   candidate; keep actual activation as a separate host/human action.
-4. Add resumable orchestration state linking plan, approvals, execution, experience, evaluation,
-   dataset, training and model-candidate evidence without hidden reasoning.
-5. Keep deployment/production activation outside model-callable tools.
+1. Add resumable orchestration state linking plan, approvals, execution, experience, evaluation,
+   dataset, training, candidate and promotion-review evidence without hidden reasoning.
+2. Add a separate explicit activation request contract that references an exact A20 review record
+   and requires host/human approval; do not activate automatically.
+3. Add rollback identity and previous-baseline binding before any activation can be considered.
+4. Add post-activation shadow/health evidence contracts before a candidate can become canonical.
+5. Keep deployment credentials and actual serving changes outside model-callable tools.
 
 ## Architectural invariants
 
@@ -273,14 +264,12 @@ A16 paired checkpoint evaluation before any promotion review
 22. Hidden provider reasoning is not persisted as learning data.
 23. Learning candidates must use the exact paired benchmark case set/severity as baseline.
 24. Any paired regression or critical failure rejects a learning candidate.
-25. Benchmark eligibility never auto-promotes a playbook/model.
-26. Dataset curation is explicit by verified execution record ID.
-27. Curated dataset export excludes hidden reasoning/free-form notes.
-28. Dataset export never authorizes training or model promotion.
-29. Training requires an exact verified fine-tuning-candidate dataset manifest.
-30. Training inputs bind exact base-model artifact, trainer config, seed and code commit.
-31. Creating a training spec never authorizes or auto-starts training.
-32. Completed training binds one checkpoint hash to one exact input fingerprint and authorization
-    reference.
-33. A trained checkpoint requires independent A16 evaluation and is never auto-promoted.
-34. Tests define safety behavior before capability is widened.
+25. Dataset export never authorizes training or model promotion.
+26. Training inputs bind exact dataset, base-model artifact, trainer config, seed and code commit.
+27. Creating a training spec never authorizes or auto-starts training.
+28. Completed training binds one checkpoint hash to one exact input fingerprint and authorization.
+29. A model candidate id is derived from immutable training/checkpoint lineage.
+30. Model candidates never carry activation authority.
+31. Promotion review recomputes A16 rather than trusting a claimed report.
+32. Promotion-review eligibility never activates or deploys a candidate.
+33. Tests define safety behavior before capability is widened.
