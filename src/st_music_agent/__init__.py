@@ -2,6 +2,24 @@
 
 from .catalog import DEFAULT_MODELS
 from .contracts import ActionRequest, AgentTask, ModelProfile, RiskLevel, TaskKind
+from .dataset_export import (
+    DATASET_EXPORT_SCHEMA_VERSION,
+    CuratedDatasetBuilder,
+    CuratedDatasetExport,
+    CuratedDatasetSelection,
+    DatasetExportError,
+    DatasetPurpose,
+)
+from .execution_outcome import (
+    EXECUTION_OUTCOME_SCHEMA_VERSION,
+    EvidenceCheckStatus,
+    ExecutionCheck,
+    ExecutionObservation,
+    ExecutionOutcomeError,
+    ExecutionOutcomeStatus,
+    ExecutionOutcomeStore,
+    ExecutionRecord,
+)
 from .experience import (
     EXPERIENCE_SCHEMA_VERSION,
     ExperienceAdvisor,
@@ -53,9 +71,11 @@ from .portfolio_planning import (
 from .router import ModelRouter
 
 __all__ = [
+    "DATASET_EXPORT_SCHEMA_VERSION",
     "DEFAULT_MODELS",
     "EVALUATION_POLICY_VERSION",
     "EVALUATION_SCHEMA_VERSION",
+    "EXECUTION_OUTCOME_SCHEMA_VERSION",
     "EXPERIENCE_SCHEMA_VERSION",
     "MUSIC_EVIDENCE_SCHEMA_VERSION",
     "PORTFOLIO_PLAN_SCHEMA_VERSION",
@@ -71,8 +91,20 @@ __all__ = [
     "CrossProjectPlan",
     "CrossProjectPlanner",
     "CrossProjectVerifier",
+    "CuratedDatasetBuilder",
+    "CuratedDatasetExport",
+    "CuratedDatasetSelection",
+    "DatasetExportError",
+    "DatasetPurpose",
     "EvidenceAuthority",
+    "EvidenceCheckStatus",
     "EvidenceSource",
+    "ExecutionCheck",
+    "ExecutionObservation",
+    "ExecutionOutcomeError",
+    "ExecutionOutcomeStatus",
+    "ExecutionOutcomeStore",
+    "ExecutionRecord",
     "ExperienceAdvisor",
     "ExperienceObservation",
     "ExperienceOutcome",
