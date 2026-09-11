@@ -5,7 +5,7 @@ agents across ST projects.
 
 ## Current stage
 
-A1-A12 guarded agent + music evidence foundation:
+A1-A13 guarded agent + music evidence foundation:
 
 - **A1 — Core contracts:** task, model capability, provider and action-risk contracts.
 - **A2 — Model routing:** capability-driven selection across current open-model profiles.
@@ -15,111 +15,80 @@ A1-A12 guarded agent + music evidence foundation:
   boundary, environment credential resolution, guarded tool execution and a first CLI.
 - **A5 — Guarded workspace:** repository-confined file operations plus a narrow command
   classifier.
-- **A6 — Disposable sandbox:** command execution requires a hardened sandbox backend; the first
-  concrete backend uses ephemeral Docker with no network, dropped capabilities and resource
-  limits.
-- **A7 — Tool-call and evidence boundary:** only registered ST tools can be dispatched; model-
-  facing output is redacted and bounded; tool requests/results can be written to a tamper-evident
-  append-only run journal.
-- **A8 — Provider tool loop + GitHub read surface:** OpenAI-compatible providers can issue
-  bounded function calls into an explicit ST registry. Provider messages are canonicalized,
-  reasoning state may be replayed internally without being exposed publicly, and GitHub reads
-  are bounded with credential-sensitive paths denied.
-- **A9 — Policy-aware GitHub mutations:** agents may create non-protected feature branches and
-  write bounded non-sensitive files through deterministic policy. Protected-branch writes,
-  deletion and pull-request creation remain human-gated; destructive/PR operations are not
-  registered as model-callable tools, and merge is not exposed.
-- **A10 — Run budgets + host approval broker:** provider loops enforce cumulative elapsed,
-  model-turn, tool-call and model-facing byte budgets. Human approvals use opaque one-shot host
-  tickets that exactly bind one action/target and cannot be generated through model tools.
-- **A11 — OpenHands ST bridge:** OpenHands Agent Server can be configured with one restricted ST
-  MCP bridge. Raw OpenHands terminal/editor tools remain absent; the bridge manifest is derived
-  only from `ToolRegistry`, tool names/arguments are bounded, and OpenHands applies an exact
-  allowlist filter for ST tools plus safe `finish`/`think` built-ins.
-- **A12 — Music-domain evidence:** the agent can read structured, source-provenanced snapshots
-  from ST Score Restore and MusicXML-to-Guitar-TAB without mutating either project. Score Restore
-  production/Stage 12 gates and TAB REVIEW_REQUIRED/canonical-export semantics fail closed when
-  their repository truth contracts are missing or drift unexpectedly.
+- **A6 — Disposable sandbox:** executable repository code requires a hardened sandbox backend;
+  the concrete Docker backend is ephemeral, network-disabled and resource-bounded.
+- **A7 — Tool-call and evidence boundary:** only registered ST tools execute; output is bounded,
+  redacted and optionally recorded in a hash-chained run journal.
+- **A8 — Provider tool loop + GitHub read surface:** provider function calls are canonicalized and
+  mapped into explicit ST registry tools; read-only GitHub access is bounded.
+- **A9 — Policy-aware GitHub mutations:** model-callable writes are limited to reversible feature-
+  branch creation/file writing; protected/destructive/external actions remain gated.
+- **A10 — Run budgets + host approval broker:** cumulative time/turn/tool/byte budgets plus opaque
+  one-shot exact-action approvals.
+- **A11 — OpenHands ST bridge:** OpenHands can use the ST registry through one restricted MCP
+  bridge; raw TerminalTool/FileEditorTool are not granted.
+- **A12 — Score Restore + MusicXML/TAB evidence:** read-only, source-provenanced domain snapshots
+  preserve production, Stage 12, REVIEW_REQUIRED and canonical-export boundaries.
+- **A13 — Score Editor + score-following evidence:** repository source-of-truth and permanent
+  research evidence are now available as bounded snapshots without silently converting feature
+  completion into release authority or research evidence into production/pedagogical authority.
 
-## Initial model strategy
+## Model strategy
 
-The architecture deliberately does not depend on one model.
-
-- **GLM-5.1** — primary long-horizon agentic engineering profile.
-- **Qwen3.8** — open secondary model and longer-context fallback.
-- **Kimi-K2.5** — multimodal profile for score-image and notation inspection.
-
-These are catalog entries rather than hard dependencies and can be replaced as models improve.
+The architecture deliberately does not depend on one model. The initial catalog uses GLM-5.1 for
+primary agentic engineering, Qwen3.8 as an open long-context secondary profile and Kimi-K2.5 for
+multimodal/score-image work. These are replaceable capability profiles, not hard dependencies.
 
 ## Framework strategy
 
 OpenHands Software Agent SDK / Agent Server is the preferred external software-agent execution
-substrate. OpenManus, mini-SWE-agent and Qwen-Agent/Qwen Code remain architectural references;
-ST-specific routing, policy and music behavior stay in this repository.
+substrate. OpenHands is connected only through a narrow ST-controlled MCP boundary. A bridged
+conversation advertises safe `finish`/`think` built-ins and exact ST registry names; raw
+`TerminalTool` and `FileEditorTool` are absent.
 
-OpenHands is connected through a narrow ST-controlled MCP boundary. `TerminalTool` and
-`FileEditorTool` are not injected. A bridged conversation advertises only safe OpenHands
-`finish`/`think` built-ins and the exact ST registry tool names permitted by the host.
+## Music-domain evidence tools
 
-A11 contains the protocol-neutral ST bridge core and OpenHands MCP configuration wiring. The
-actual Streamable HTTP MCP network server remains a host/deployment component rather than being
-silently started inside this library.
-
-A12 adds the first domain tools on top of that same registry, so no separate privilege path is
-introduced for music projects.
-
-## First music-domain tools
-
-`build_default_music_domain_toolset()` creates read-only adapters for the current ST Score Restore
-and MusicXML-to-Guitar-TAB repositories. Register the returned toolset into any `ToolRegistry` to
-make these bounded tools available to either the direct provider loop or the A11 OpenHands bridge:
+`build_default_music_domain_toolset()` now creates read-only adapters for four current ST
+repositories. Register the returned `FullMusicDomainToolset` into a `ToolRegistry` to expose:
 
 - `music.score_restore.snapshot`
 - `music.tab_engine.capability_snapshot`
+- `music.score_editor.snapshot`
+- `music.score_following.snapshot`
 
-Every snapshot includes evidence schema version, project/authority, bounded claims, warnings and
-source provenance (`repository`, `ref`, `path`, Git blob SHA).
+Every snapshot contains an evidence schema version, project/authority, bounded claims, warnings
+and source provenance (`repository`, `ref`, `path`, Git blob SHA).
 
-See [`docs/music-domain-evidence.md`](docs/music-domain-evidence.md) for the A12 contract.
+The four current truth boundaries are deliberately different:
+
+- **Score Restore:** evaluation/candidate success does not authorize production inference or
+  Stage 12.
+- **MusicXML -> TAB:** REVIEW_REQUIRED can preserve provisional TAB/playback, while canonical TAB
+  export remains PASS-only.
+- **Score Editor:** merged feature work does not open the standalone release matrix or authorize
+  SesliTab V4 cutover.
+- **Real-time score following:** SF-11 permanent research evidence is not acoustic mono-mixture,
+  production or pedagogical authority; SF-12 remains the next research stage.
+
+See [`docs/music-domain-evidence.md`](docs/music-domain-evidence.md).
 
 ## Safety boundary
 
-The model never decides its own privilege level. Action risk is evaluated before execution.
+The model never decides its own privilege level.
 
 - read-only inspection can run autonomously;
 - reversible feature-branch writes can run autonomously;
-- direct writes to `main`/`master`, destructive operations and external side effects require
-  exact matching human approval;
-- secret/credential exposure is denied;
-- provider and GitHub credentials are resolved from environment variables only inside adapter
-  operations, after policy permits execution;
-- HTTP transport accepts only absolute HTTP/HTTPS URLs;
-- workspace paths cannot traverse or resolve through symlinks outside the repository root;
-- commands cannot execute without a configured sandbox backend;
-- Docker sandbox images are digest-pinned by default and networking is disabled;
-- Git inspection gets a read-only repository mount; validation commands get a writable mount;
-- arbitrary shell/Python commands remain outside the allowlist;
-- command and tool output is sanitized before model-facing exposure;
-- provider tool calls are bounded and replayed through a canonical message shape;
-- provider-loop traffic is cumulatively bounded by monotonic time, turn count, tool-call count
-  and serialized model-facing byte count;
-- GitHub read/write file paths reject common credential/key locations;
-- GitHub branch names reject protected-ref aliases and unsafe ref forms;
-- only feature-branch creation and file writing are model-callable GitHub mutations;
-- deletion and PR creation remain host-side human-gated adapter operations; merge is absent;
-- host approval tickets are opaque, exact-action/target, one-shot and never model tools;
-- OpenHands bridged mode uses `tools=[]`, one ST MCP server and an exact post-tool-registration
-  allowlist; `terminal`, `file_editor` and arbitrary MCP tools are excluded;
-- non-loopback ST bridge endpoints require HTTPS; optional bridge bearer credentials are resolved
-  from an environment variable only when constructing the trusted host conversation request;
-- music-domain snapshots are read-only and fail closed on truncated evidence, unsupported truth
-  schemas, missing safety booleans or executable-contract drift;
-- evaluation passes never implicitly authorize Score Restore production/Stage 12, and
-  REVIEW_REQUIRED never implicitly authorizes canonical TAB export;
-- journal payloads are sanitized before persistence and every event is linked by SHA-256 hash.
-
-Redaction is defense in depth rather than a complete data-loss-prevention system. Hosts should
-still avoid placing unnecessary secrets in agent-visible workspaces or tool arguments.
+- protected-branch writes, destructive operations and external side effects require exact host
+  approval;
+- credential exposure is denied and credentials resolve only at trusted adapter boundaries;
+- arbitrary local process execution is not a model capability;
+- executable repository code runs through a hardened sandbox backend;
+- model-facing output and provider loops are bounded;
+- OpenHands discovers only the concrete ST registry manifest plus safe finish/think built-ins;
+- music-domain snapshots are read-only and fail closed on missing/truncated/drifted evidence;
+- repository evaluation/research success never silently promotes a product, model or student-
+  facing artifact to a stronger authority level;
+- persistent run evidence is sanitized and hash chained.
 
 ## Development
 
@@ -147,6 +116,5 @@ st-music-agent \
 ```
 
 See [`docs/architecture.md`](docs/architecture.md) for the architecture map,
-[`docs/model-selection.md`](docs/model-selection.md) for the model/framework research record and
-[`docs/music-domain-evidence.md`](docs/music-domain-evidence.md) for the first ST music-domain
-integration contract.
+[`docs/model-selection.md`](docs/model-selection.md) for model/framework research and
+[`docs/music-domain-evidence.md`](docs/music-domain-evidence.md) for the music evidence contract.

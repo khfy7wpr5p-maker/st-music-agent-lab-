@@ -130,7 +130,7 @@ def test_score_restore_snapshot_preserves_closed_production_boundary() -> None:
     snapshot = ScoreRestoreEvidenceAdapter(_score_client()).collect()
     payload = snapshot.as_dict()
 
-    assert payload["schema_version"] == "1.0.0"
+    assert payload["schema_version"] == "1.1.0"
     assert payload["project"] == "score_restore"
     assert payload["authority"] == "repository_current_truth"
     assert payload["state"] == "V2A_HELDOUT_AND_STAGE9A_PASS_CANDIDATE_FROZEN"

@@ -2,6 +2,11 @@
 
 from .catalog import DEFAULT_MODELS
 from .contracts import ActionRequest, AgentTask, ModelProfile, RiskLevel, TaskKind
+from .music_adapters_extended import (
+    FullMusicDomainToolset,
+    ScoreEditorEvidenceAdapter,
+    ScoreFollowingEvidenceAdapter,
+)
 from .music_evidence import (
     MUSIC_EVIDENCE_SCHEMA_VERSION,
     EvidenceAuthority,
@@ -23,12 +28,15 @@ __all__ = [
     "AutonomyPolicy",
     "EvidenceAuthority",
     "EvidenceSource",
+    "FullMusicDomainToolset",
     "ModelProfile",
     "ModelRouter",
     "MusicEvidenceError",
     "MusicEvidenceSnapshot",
     "MusicProject",
     "RiskLevel",
+    "ScoreEditorEvidenceAdapter",
+    "ScoreFollowingEvidenceAdapter",
     "TaskKind",
     "build_default_music_domain_toolset",
 ]
