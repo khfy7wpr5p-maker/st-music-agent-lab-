@@ -1,6 +1,6 @@
 # ST Music Agent Lab — Architecture Map
 
-Status: A1-A16 guarded agent + verified planning/learning/evaluation foundation
+Status: A1-A18 guarded agent + verified planning/learning/evaluation/data foundation
 Date: 2026-09-11
 
 ## Purpose
@@ -13,7 +13,8 @@ reversible, capability-driven and isolated from the host.
 
 The ST core stays small and framework-independent. Models, OpenHands, GitHub and music projects
 attach through explicit adapters. No external framework may bypass ST-owned policy, tool, budget,
-approval, evidence, verification, learning, evaluation or sandbox boundaries.
+approval, evidence, verification, learning, evaluation, execution-evidence, dataset or sandbox
+boundaries.
 
 ## A1-A6 — Core execution and isolation
 
@@ -68,87 +69,80 @@ Every candidate carries an evidence hash; the plan has an evidence-set hash and 
 `CrossProjectVerifier` independently recomputes the plan. Source-SHA drift, changed order/actions,
 policy mismatch or any execution-authorized claim causes FAIL.
 
-Read-only tool:
-
-- `music.portfolio.plan`
+Read-only tool: `music.portfolio.plan`.
 
 ## A15 — Verified experience learning
 
-`ExperienceStore` is trusted-host-write-only and uses the existing sanitized hash-chained journal.
-An outcome can be recorded only for the exact PASS-verified plan id and recomputation id.
+`ExperienceStore` is trusted-host-write-only and uses the sanitized hash-chained journal. An
+outcome can be recorded only for the exact PASS-verified plan id and recomputation id.
 
-`ExperienceAdvisor` aggregates verified history into:
+`ExperienceAdvisor` aggregates verified history into `prefer`, `review` or `observe`; all
+recommendations have `auto_apply=false`.
 
-- `prefer`: >=3 evaluated attempts and >=80% success;
-- `review`: >=3 evaluated attempts and <=50% success;
-- `observe`: insufficient or mixed evidence.
-
-Abstentions remain visible and are not counted as success/failure. All recommendations have
-`auto_apply=false`.
-
-Read-only tool:
-
-- `learning.experience.summary`
+Read-only tool: `learning.experience.summary`.
 
 The model cannot write/rewrite experience history or automatically change prompts, policy,
 privileges, code or model weights.
 
 ## A16 — Paired learning evaluation gate
 
-A15 historical preference is advisory evidence, not proof that a changed playbook/model is better.
-A16 adds `learning_evaluation.py` to compare one baseline and one candidate on an identical paired
-benchmark corpus before the candidate can reach host review.
+A16 compares one baseline and one candidate on an identical paired benchmark corpus before the
+candidate can reach host review.
 
-### Benchmark contract
+Default policy `2026-09-11.v1` requires >=8 paired cases, >=2 critical cases, exact matching case
+ids/severity, zero regressions, zero candidate critical failures and at least one strict
+improvement. Outcome order is `failure < abstained < success`.
 
-Each `BenchmarkCaseResult` contains:
+A report can return `eligible_for_host_review` or `rejected`; `auto_promote=false` always.
 
-- stable case id;
-- severity: `standard` or `critical`;
-- outcome: `success`, `abstained` or `failure`;
-- explicit evidence references.
+Read-only model tool: `learning.evaluation.policy`.
 
-`BenchmarkRun` requires unique case ids and computes a SHA-256 fingerprint over candidate id,
-case definitions, outcomes and evidence references. Evidence changes therefore change run identity.
+## A17 — Exact execution outcome evidence
 
-### Evaluation policy
+A17 closes the gap between a verified plan and a later success claim.
 
-Policy version: `2026-09-11.v1`.
+`ExecutionOutcomeStore` is trusted-host-write-only and hash chained. An `ExecutionObservation`
+must bind to the exact verified plan candidate through:
 
-Default gate requires:
+- `plan_id` and candidate rank;
+- project identity;
+- exact planned action;
+- candidate evidence SHA-256;
+- expected repository;
+- branch and full 40-hex commit SHA;
+- one or more CI checks;
+- one or more validator checks.
 
-- >=8 paired cases;
-- >=2 critical cases;
-- exact same case ids between baseline/candidate;
-- exact same case severity;
-- zero paired regressions;
-- zero candidate critical failures;
-- at least one strict improvement.
+The provided `PlanVerificationReport` must be PASS and its `plan_id` plus
+`recomputed_plan_id` must equal the same plan.
 
-Outcome ordering is conservative:
+`SUCCESS` requires every CI and validator check to be `success`. `FAILURE` or `ABSTAINED` must
+retain non-green evidence and cannot masquerade as successful execution.
 
-`failure < abstained < success`
+Execution records are historical evidence only. They do not grant production, release, export,
+training or promotion authority.
 
-A tie is rejected as “no improvement.” Any regression rejects the candidate even if other cases
-improve.
+## A18 — Curated dataset boundary
 
-`LearningEvaluationReport` can return:
+`CuratedDatasetBuilder` deterministically exports explicitly selected verified execution record
+IDs for `offline_evaluation` or `fine_tuning_candidate` use.
 
-- `eligible_for_host_review`; or
-- `rejected`.
+Rows contain only structured operational facts: project/plan/candidate identity, planned action,
+evidence hash, repository, branch, exact commit SHA, outcome and CI/validator evidence.
 
-`auto_promote` is always false. Eligibility is not activation authority.
+Free-form execution notes are excluded. Provider messages, hidden reasoning and chain-of-thought
+are not dataset fields.
 
-### Model surface
+Every export contains a manifest SHA-256 and hard-coded authority fields:
 
-The only A16 model-facing tool is:
+- `training_authorized=false`;
+- `auto_train=false`;
+- `auto_promote=false`.
 
-- `learning.evaluation.policy`
+`fine_tuning_candidate` means only that the dataset may later be reviewed by a separately
+authorized training stage.
 
-It is read-only. There is no registered tool to submit benchmark evidence, approve/promote a
-candidate, edit prompts/policy, or change model weights.
-
-## Current learning/decision loop
+## Current decision/learning chain
 
 ```text
 four project snapshots
@@ -161,39 +155,47 @@ CrossProjectVerifier ---- FAIL -> stop
         |
        PASS
         v
-host execution path
+guarded host execution
         |
         v
-CI / validators / evidence
+exact branch/commit + CI + validators
         |
         v
-ExperienceStore
+ExecutionOutcomeStore
+        |
+        +-----------------------> ExperienceStore / Advisor
+        |                                  |
+        |                                  v
+        |                         prefer / observe / review
+        |                                  |
+        |                         paired candidate benchmark
+        |                                  |
+        |                         LearningEvaluationGate
+        |                                  |
+        |                     rejected / eligible for host review
         |
         v
-ExperienceAdvisor
-prefer / observe / review
+explicit record-id curation
         |
-        | candidate implementation remains separately controlled
         v
-baseline benchmark <---- paired cases ----> candidate benchmark
-        |                                      |
-        +--------- LearningEvaluationGate -----+
-                         |
-               rejected / eligible for host review
-                         |
-                  auto_promote = false
+CuratedDatasetBuilder
+        |
+        v
+offline-evaluation / fine-tuning-candidate manifest
+        |
+ training_authorized=false / auto_train=false / auto_promote=false
 ```
 
-## A17 continuation
+## A19 continuation
 
-1. Add an execution-outcome contract binding one completed action to exact plan candidate,
-   branch/commit, CI/validator evidence and final verifier state.
-2. Add resumable orchestration state linking plan, execution, journal, budget, approval,
-   experience and evaluation evidence without hidden model reasoning.
-3. Add curated dataset export contracts from verified experience/evaluation evidence for possible
-   future fine-tuning; no raw chat/hidden reasoning export.
-4. Add independent pre/post candidate benchmark bundles for future model versions.
-5. Keep actual training and model promotion as separately authorized host/human stages.
+1. Add an explicitly authorized training-run contract consuming one exact curated dataset manifest
+   plus base-model identity, trainer config and reproducibility seed.
+2. Record training output checkpoint hash and environment provenance without granting promotion.
+3. Require the trained checkpoint to pass the existing A16 paired evaluation against the current
+   baseline before it may become a promotion candidate.
+4. Add resumable orchestration state linking plan, approvals, execution, experience, evaluation,
+   dataset and optional training-run evidence without hidden reasoning.
+5. Keep actual checkpoint activation/promotion as a separate explicit host/human gate.
 
 ## Architectural invariants
 
@@ -205,7 +207,7 @@ baseline benchmark <---- paired cases ----> candidate benchmark
 6. Host process execution is not a raw model capability.
 7. Executable repository code runs only through an ST-approved sandbox backend.
 8. Model-facing output/run traffic is bounded and redacted.
-9. Persistent run and experience evidence is sanitized and hash chained.
+9. Persistent run, experience and execution evidence is sanitized and hash chained.
 10. Provider schemas are not host authorization.
 11. Run budgets fail closed before overflowing the next action.
 12. OpenHands raw terminal/editor capability is absent from the bridged agent configuration.
@@ -213,13 +215,18 @@ baseline benchmark <---- paired cases ----> candidate benchmark
 14. Portfolio planning is deterministic/versioned and never execution authority.
 15. Portfolio verification independently recomputes accepted plans.
 16. Evidence drift invalidates old plans.
-17. Only exact verified outcomes may enter experience history.
-18. Models cannot write experience history through registered tools.
-19. Experience recommendations never auto-apply.
-20. Hidden provider reasoning is not persisted as learning data.
-21. A learning candidate must use the exact paired benchmark case set/severity as baseline.
-22. Any paired regression rejects a learning candidate.
-23. Critical benchmark failures reject a learning candidate.
-24. Benchmark eligibility never auto-promotes a playbook/model.
-25. Future fine-tuning requires curated data, independent evaluation and explicit promotion gates.
-26. Tests define safety behavior before capability is widened.
+17. Execution success requires exact candidate/repository/commit/CI/validator evidence.
+18. A failed/skipped validator cannot be hidden inside a successful execution record.
+19. Only exact verified outcomes may enter experience history.
+20. Models cannot write experience history through registered tools.
+21. Experience recommendations never auto-apply.
+22. Hidden provider reasoning is not persisted as learning data.
+23. Learning candidates must use the exact paired benchmark case set/severity as baseline.
+24. Any paired regression or critical failure rejects a learning candidate.
+25. Benchmark eligibility never auto-promotes a playbook/model.
+26. Dataset curation is explicit by verified execution record ID.
+27. Curated dataset export excludes hidden reasoning/free-form notes.
+28. Dataset export never authorizes training or model promotion.
+29. Future training requires an explicit dataset manifest, reproducible run contract and independent
+    post-training evaluation.
+30. Tests define safety behavior before capability is widened.
