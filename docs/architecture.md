@@ -1,6 +1,6 @@
 # ST Music Agent Lab — Architecture Map
 
-Status: A1-A26 guarded agent + verified planning/learning/evaluation/data/training/model-runtime/canonical-baseline-stability/drift/rollback-recovery foundation
+Status: A1-A26 guarded core + APP1 runnable operator application
 Date: 2026-09-11
 
 ## Purpose
@@ -10,6 +10,10 @@ OpenHands, GitHub and ST music projects attach through explicit adapters while S
 tool, budget, approval, evidence, verification, learning, evaluation, execution, dataset,
 training, model-candidate, orchestration, activation, canonical-baseline, stable-baseline registry,
 operational-drift and rollback-recovery boundaries remain authoritative.
+
+APP1 adds the first real user-facing application surface above that core. The UI does not bypass or
+reimplement the safety architecture: it consumes the same bounded evidence and verified planning
+services.
 
 ## A1-A11 — Guarded execution
 
@@ -82,15 +86,10 @@ A26 distinguishes a rollback review request from an externally executed rollback
 `RollbackExecutionReceiptBuilder` recomputes the exact A25 baseline, drift windows, drift report and
 rollback review request before it can record an outcome.
 
-A successful `rolled_back` receipt requires:
-
-- separate host authorization;
-- an external execution reference;
-- supporting evidence;
-- observed serving model/checkpoint equal to the exact Baseline Registry predecessor.
-
-The receipt records the external action only. It keeps `auto_rollback=false` and
-`auto_switch=false`.
+A successful `rolled_back` receipt requires separate host authorization, an external execution
+reference, supporting evidence and observed serving model/checkpoint equal to the exact Baseline
+Registry predecessor. The receipt records the external action only. It keeps `auto_rollback=false`
+and `auto_switch=false`.
 
 A successful rollback receipt does not immediately become registry truth.
 `PostRollbackRecoveryGate` requires at least two ordered rounds, each with exact
@@ -102,13 +101,35 @@ when A25 and A26 evidence recomputes successfully, the current registry record i
 baseline, and the rollback target is the exact prior generation already in history. The degraded
 canonical generation is never deleted.
 
-For safety, a restored rollback generation does not invent another fallback target. Any future
-production change must gather fresh evidence and pass host review.
+## APP1 — Runnable Operator Console
 
-A26 extends operational watch state through:
+APP1 is the first real application surface. It is dependency-free at runtime and starts with:
 
-`baseline_bound -> drift_reviewed -> rollback_review_requested -> rollback_execution_recorded
--> post_rollback_recovery_reviewed -> rollback_baseline_registered`
+```text
+st-music-agent app
+      ↓
+localhost HTTP server
+      ↓
+Operator Console UI
+      ↓
+OperatorConsoleService
+      ↓
+read-only music evidence adapters + PortfolioPlanningService
+      ↓
+A1-A26 guarded core
+```
+
+The application exposes:
+
+- current state/summary/warnings/next safe boundary for all four ST music projects;
+- isolated per-project errors so one inaccessible repository does not crash the whole UI;
+- a capability panel that explicitly shows mutation/production actions as disabled;
+- fresh deterministic portfolio planning with independent verifier status;
+- a mobile-friendly single-page operator interface.
+
+HTTP routes are currently read-only. Non-GET methods fail closed with `405`. APP1 therefore gives a
+truthful working application rather than presenting execution controls that are not yet safely
+connected.
 
 ## Resumable lifecycle
 
@@ -147,15 +168,20 @@ registered baseline
 `OrchestrationStateStore` ends its training/model lifecycle at `baseline_registered`. Repeated
 operational drift and rollback cycles remain in separate hash-chained operational watch state.
 
-## A27 continuation
+## Application continuation — APP2
 
-1. Add bounded incident/rollback outcome learning so failed canonical generations inform future
-   candidate evaluation without becoming hidden reasoning data.
-2. Add read-only stable-baseline and incident-lineage evidence for planner/verifier use.
-3. Add recovery-period quarantine metadata for superseded failed generations without deleting them.
-4. Keep serving credentials, actual model switches and rollback execution outside model-callable
-   tools.
-5. Preserve host/human authorization for all production-impacting transitions.
+1. Add an explicit task request/preview contract to the Operator Console.
+2. Bind task preview to current project evidence, target repository and safe feature-branch intent.
+3. Route execution through the existing deterministic policy/approval layer rather than adding a
+   second mutation path.
+4. Show execution state, commit/CI/validator evidence and resumable status in the same UI.
+5. Keep protected-branch, deployment, training, canonicalization and rollback actions unavailable
+   unless their existing host/human gates are separately satisfied.
+
+## Model-lifecycle continuation — A27
+
+Incident/rollback outcome learning and read-only incident-lineage evidence remain useful future core
+work, but application integration is now the nearer product priority.
 
 ## Architectural invariants
 
@@ -180,5 +206,6 @@ operational drift and rollback cycles remain in separate hash-chained operationa
 18. Rollback execution receipts require separate host authorization and exact observed target.
 19. Post-rollback recovery must pass before rollback history becomes the current registry generation.
 20. Failed/superseded baseline generations remain in immutable history.
-21. Automatic canonicalization, baseline switching and rollback remain disabled.
-22. Tests define safety behavior before capability is widened.
+21. APP1 HTTP write methods remain disabled until guarded execution is explicitly connected.
+22. Automatic canonicalization, baseline switching and rollback remain disabled.
+23. Tests define safety behavior before capability is widened.
