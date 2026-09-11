@@ -149,11 +149,11 @@ class DriftWatchReport:
 class DriftWatchGate:
     """Evaluates sustained canonical-baseline drift without executing rollback."""
 
-    _DEGRADATION_KINDS = {
+    _DEGRADATION_KINDS = (
         DriftCheckKind.HEALTH,
         DriftCheckKind.QUALITY,
         DriftCheckKind.DISTRIBUTION,
-    }
+    )
 
     def evaluate(
         self,
@@ -230,10 +230,7 @@ class DriftWatchGate:
         elif baseline.rollback_model_id is None or baseline.rollback_checkpoint_sha256 is None:
             decision = DriftWatchDecision.OBSERVE
             reasons.append("registered baseline has no exact rollback predecessor")
-        elif (
-            max_streak >= MIN_CONSECUTIVE_DEGRADED_WINDOWS
-            and latest_degraded
-        ):
+        elif max_streak >= MIN_CONSECUTIVE_DEGRADED_WINDOWS and latest_degraded:
             decision = DriftWatchDecision.ELIGIBLE_FOR_ROLLBACK_REVIEW
             reasons.append("sustained drift or regression remains present in the latest window")
         else:
