@@ -5,7 +5,7 @@ agents across ST projects.
 
 ## Current stage
 
-A1-A13 guarded agent + music evidence foundation:
+A1-A15 guarded agent + evidence + verified learning foundation:
 
 - **A1 — Core contracts:** task, model capability, provider and action-risk contracts.
 - **A2 — Model routing:** capability-driven selection across current open-model profiles.
@@ -30,8 +30,12 @@ A1-A13 guarded agent + music evidence foundation:
 - **A12 — Score Restore + MusicXML/TAB evidence:** read-only, source-provenanced domain snapshots
   preserve production, Stage 12, REVIEW_REQUIRED and canonical-export boundaries.
 - **A13 — Score Editor + score-following evidence:** repository source-of-truth and permanent
-  research evidence are now available as bounded snapshots without silently converting feature
-  completion into release authority or research evidence into production/pedagogical authority.
+  research evidence are available as bounded snapshots without authority inflation.
+- **A14 — Planner + independent verifier:** all four snapshots are ranked through one transparent,
+  deterministic portfolio policy and independently recomputed before the plan is accepted.
+- **A15 — Verified experience learning:** only host-recorded outcomes from exactly verified plans
+  enter a hash-chained experience store; models can read advisory summaries but cannot write
+  experience history or auto-change policy/models/code.
 
 ## Model strategy
 
@@ -48,7 +52,7 @@ conversation advertises safe `finish`/`think` built-ins and exact ST registry na
 
 ## Music-domain evidence tools
 
-`build_default_music_domain_toolset()` now creates read-only adapters for four current ST
+`build_default_music_domain_toolset()` creates read-only adapters for four current ST
 repositories. Register the returned `FullMusicDomainToolset` into a `ToolRegistry` to expose:
 
 - `music.score_restore.snapshot`
@@ -70,7 +74,35 @@ The four current truth boundaries are deliberately different:
 - **Real-time score following:** SF-11 permanent research evidence is not acoustic mono-mixture,
   production or pedagogical authority; SF-12 remains the next research stage.
 
-See [`docs/music-domain-evidence.md`](docs/music-domain-evidence.md).
+## Planning and verification
+
+`PortfolioPlanningService` collects all four snapshots and exposes one read-only model tool:
+
+- `music.portfolio.plan`
+
+The plan uses policy version `2026-09-11.v1`. It currently prioritizes closing frozen-candidate
+validation/integration uncertainty, then teacher-review integration, then bounded editor feature
+work, then new research expansion. This order is explicit policy rather than hidden LLM judgment.
+
+`CrossProjectVerifier` independently recomputes the complete plan from the same source evidence.
+Changed source SHAs, altered actions/order, unexpected domain-gate changes or any claim that the
+plan authorizes execution cause verification failure. Every portfolio plan has
+`execution_authorized=false`.
+
+## Verified experience learning
+
+`ExperienceStore` accepts a structured outcome only from trusted host code and only when the
+provided `PlanVerificationReport` is PASS for the exact same deterministic `plan_id`.
+
+The model has no experience-write tool. It may receive only:
+
+- `learning.experience.summary`
+
+`ExperienceAdvisor` classifies verified playbook history as `prefer`, `observe` or `review` after
+minimum evidence thresholds. All recommendations set `auto_apply=false`; they cannot alter model
+weights, prompts, policies, privileges, tools or repository code.
+
+See [`docs/planning-and-learning.md`](docs/planning-and-learning.md).
 
 ## Safety boundary
 
@@ -88,7 +120,10 @@ The model never decides its own privilege level.
 - music-domain snapshots are read-only and fail closed on missing/truncated/drifted evidence;
 - repository evaluation/research success never silently promotes a product, model or student-
   facing artifact to a stronger authority level;
-- persistent run evidence is sanitized and hash chained.
+- portfolio planning never authorizes execution and is independently recomputed;
+- only exact verified outcomes can enter experience history;
+- experience recommendations never auto-apply;
+- persistent run/experience evidence is sanitized and hash chained.
 
 ## Development
 
@@ -116,5 +151,6 @@ st-music-agent \
 ```
 
 See [`docs/architecture.md`](docs/architecture.md) for the architecture map,
-[`docs/model-selection.md`](docs/model-selection.md) for model/framework research and
-[`docs/music-domain-evidence.md`](docs/music-domain-evidence.md) for the music evidence contract.
+[`docs/model-selection.md`](docs/model-selection.md) for model/framework research,
+[`docs/music-domain-evidence.md`](docs/music-domain-evidence.md) for the music evidence contract
+and [`docs/planning-and-learning.md`](docs/planning-and-learning.md) for A14-A15.
