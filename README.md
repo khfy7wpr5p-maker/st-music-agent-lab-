@@ -5,90 +5,91 @@ agents across ST projects.
 
 ## Current stage
 
-A1-A22 guarded agent + verified evidence/learning/training/model-runtime foundation:
+A1-A23 guarded agent + verified evidence/learning/training/model-runtime/canonical-baseline
+foundation:
 
-- **A1-A11:** guarded execution, policy, budgets, approvals, sandboxing, GitHub boundaries and
-  restricted OpenHands integration.
+- **A1-A11:** guarded execution, deterministic privilege policy, budgets, approvals, sandboxing,
+  bounded GitHub mutation and restricted OpenHands integration.
 - **A12-A13:** read-only source-provenanced evidence from Score Restore, MusicXML/TAB, Score Editor
-  and Real-Time Score Following.
-- **A14:** deterministic cross-project planner plus independent recomputation verifier.
-- **A15:** trusted-host-write verified experience history with advisory learning only.
-- **A16:** paired baseline-vs-candidate evaluation; regressions and critical failures reject.
-- **A17:** exact execution outcome bound to repository/branch/commit/CI/validator evidence.
-- **A18:** explicit curated dataset export with training/promotion authority fixed false.
-- **A19:** reproducible training-run contract binding dataset, base model, trainer config, seed and
-  code commit to any resulting checkpoint.
-- **A20:** immutable model-candidate lineage and independent promotion-review recomputation.
-- **A21:** hash-chained resumable lifecycle state plus exact activation-request/rollback binding.
-- **A22:** host activation receipts plus deterministic serving/health/shadow/rollback-readiness
-  review before any candidate may reach canonical-baseline review.
+  and real-time score following.
+- **A14-A18:** deterministic planning + independent verification, verified experience learning,
+  paired evaluation, exact execution evidence and curated dataset export.
+- **A19-A20:** reproducible training-run lineage, immutable trained-model candidate identity and
+  independent promotion-review recomputation.
+- **A21:** resumable hash-chained lifecycle state plus activation request with exact rollback
+  binding.
+- **A22:** host activation receipts and exact serving/health/shadow-quality/rollback-readiness
+  evidence before canonical review.
+- **A23:** canonical baseline review that recomputes A22 evidence, plus separately authorized
+  canonicalization receipts binding exact previous/new baseline identities.
 
-## Model strategy
+Package version: `0.21.0`.
 
-The architecture is model-agnostic. Provider/model profiles are replaceable capability profiles,
-not authority boundaries. Models never decide their own privileges.
+## Core safety model
 
-## Music-domain evidence tools
+The model never decides its own privilege level. Read-only work may run autonomously and reversible
+feature-branch writes may run autonomously; protected/destructive/external operations remain host
+or human gated.
 
-`build_default_music_domain_toolset()` exposes read-only evidence tools:
+No model-facing tool can directly:
+
+- start training;
+- promote or activate a checkpoint;
+- switch the serving model;
+- canonicalize a new baseline;
+- execute rollback.
+
+Every widening step is represented by a typed, evidence-bound contract and independently verified
+before the next boundary may open.
+
+## Music-domain evidence
+
+`build_default_music_domain_toolset()` exposes read-only snapshots for:
 
 - `music.score_restore.snapshot`
 - `music.tab_engine.capability_snapshot`
 - `music.score_editor.snapshot`
 - `music.score_following.snapshot`
 
-Project-specific authority is preserved: evaluation is not production authority, REVIEW_REQUIRED
-is not canonical TAB export, editor feature completion is not release/cutover, and score-following
-research is not production/pedagogical authority.
+The evidence plane does not inflate authority: evaluation is not production permission,
+REVIEW_REQUIRED is not canonical TAB export, editor feature completion is not release/cutover, and
+score-following research is not pedagogical or production authority.
 
 ## Verified lifecycle
 
 ```text
-music evidence
-    |
-planner -> verifier
-    |
-exact execution + CI + validators
-    |
-verified experience / curated dataset
-    |
-reproducible training contract
-    |
+source-provenanced music evidence
+        ↓
+deterministic planner → independent verifier
+        ↓
+guarded execution → exact commit + CI + validators
+        ↓
+verified execution evidence → curated dataset
+        ↓
+reproducible training contract + separate host authorization
+        ↓
 immutable model candidate
-    |
-paired benchmark + promotion recomputation
-    |
-activation request (still unauthorized)
-    |
-separate human/host activation
-    |
-activation receipt
-    |
+        ↓
+paired baseline/candidate benchmark → promotion review
+        ↓
+activation request → separate host activation → activation receipt
+        ↓
 serving identity + health + shadow quality + rollback readiness
-    |
-rejected / eligible_for_canonical_review
+        ↓
+canonical baseline review (A22 evidence recomputed)
+        ↓
+separate host canonicalization → canonicalization receipt
 ```
 
-Even after A22 passes, canonicalization is not automatic. The runtime report keeps
-`human_review_required=true`, `canonicalization_authorized=false` and `auto_canonicalize=false`.
+A successful A23 canonicalization receipt sets `post_canonical_health_required=true`; A23 itself
+does not declare the new baseline permanently healthy or disable rollback.
 
-## Safety boundary
+## Resumable evidence state
 
-- read-only inspection can run autonomously;
-- reversible feature-branch writes can run autonomously;
-- protected/destructive/external actions require exact host approval;
-- executable repository code runs only through guarded execution paths;
-- model-facing outputs are bounded/redacted;
-- persistent execution/orchestration evidence is hash chained;
-- hidden reasoning is excluded from learning/training/orchestration data;
-- dataset export never authorizes training or promotion;
-- training specs never auto-start;
-- model candidates never activate themselves;
-- activation requests never deploy;
-- activation receipts only record externally executed host actions;
-- shadow-health success grants only canonical-review eligibility;
-- deployment credentials, serving switches, rollback execution and canonicalization remain outside
-  model-callable tools.
+`OrchestrationStateStore` hash-chains structured fingerprints through the complete lifecycle up to
+`canonicalization_recorded`. Prompts, provider messages and hidden reasoning are not stored as
+lifecycle evidence. Stage skipping, regression and silent replacement of prior evidence fail
+closed.
 
 ## Development
 
@@ -98,12 +99,15 @@ ruff check src tests
 pytest
 ```
 
-See [`docs/architecture.md`](docs/architecture.md) for the architecture map,
-[`docs/music-domain-evidence.md`](docs/music-domain-evidence.md) for music evidence,
-[`docs/planning-and-learning.md`](docs/planning-and-learning.md) for A14-A15,
-[`docs/learning-evaluation.md`](docs/learning-evaluation.md) for A16,
-[`docs/execution-and-dataset.md`](docs/execution-and-dataset.md) for A17-A18,
-[`docs/training-run.md`](docs/training-run.md) for A19,
-[`docs/model-candidate-promotion.md`](docs/model-candidate-promotion.md) for A20,
-[`docs/orchestration-activation.md`](docs/orchestration-activation.md) for A21 and
-[`docs/runtime-activation.md`](docs/runtime-activation.md) for A22.
+See:
+
+- [`docs/architecture.md`](docs/architecture.md)
+- [`docs/music-domain-evidence.md`](docs/music-domain-evidence.md)
+- [`docs/planning-and-learning.md`](docs/planning-and-learning.md)
+- [`docs/learning-evaluation.md`](docs/learning-evaluation.md)
+- [`docs/execution-and-dataset.md`](docs/execution-and-dataset.md)
+- [`docs/training-run.md`](docs/training-run.md)
+- [`docs/model-candidate-promotion.md`](docs/model-candidate-promotion.md)
+- [`docs/orchestration-activation.md`](docs/orchestration-activation.md)
+- [`docs/runtime-activation.md`](docs/runtime-activation.md)
+- [`docs/canonical-baseline.md`](docs/canonical-baseline.md)
