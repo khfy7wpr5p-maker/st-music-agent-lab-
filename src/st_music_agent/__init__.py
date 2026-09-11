@@ -13,6 +13,17 @@ from .activation_request import (
     ActivationRequestBuilder,
     ActivationRequestError,
 )
+from .canonical_baseline import (
+    CANONICAL_REVIEW_SCHEMA_VERSION,
+    CANONICALIZATION_RECEIPT_SCHEMA_VERSION,
+    CanonicalBaselineError,
+    CanonicalBaselineReview,
+    CanonicalBaselineReviewGate,
+    CanonicalizationOutcome,
+    CanonicalizationReceipt,
+    CanonicalizationReceiptBuilder,
+    CanonicalReviewDecision,
+)
 from .catalog import DEFAULT_MODELS
 from .contracts import ActionRequest, AgentTask, ModelProfile, RiskLevel, TaskKind
 from .dataset_export import (
@@ -122,6 +133,8 @@ from .training_run import (
 __all__ = [
     "ACTIVATION_RECEIPT_SCHEMA_VERSION",
     "ACTIVATION_REQUEST_SCHEMA_VERSION",
+    "CANONICALIZATION_RECEIPT_SCHEMA_VERSION",
+    "CANONICAL_REVIEW_SCHEMA_VERSION",
     "DATASET_EXPORT_SCHEMA_VERSION",
     "DEFAULT_MODELS",
     "EVALUATION_POLICY_VERSION",
@@ -152,6 +165,13 @@ __all__ = [
     "BenchmarkOutcome",
     "BenchmarkRun",
     "BenchmarkSeverity",
+    "CanonicalBaselineError",
+    "CanonicalBaselineReview",
+    "CanonicalBaselineReviewGate",
+    "CanonicalReviewDecision",
+    "CanonicalizationOutcome",
+    "CanonicalizationReceipt",
+    "CanonicalizationReceiptBuilder",
     "CrossProjectPlan",
     "CrossProjectPlanner",
     "CrossProjectVerifier",
