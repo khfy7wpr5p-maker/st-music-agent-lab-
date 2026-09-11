@@ -1,6 +1,6 @@
 # ST Music Agent Lab — Architecture Map
 
-Status: A1-A11 guarded agent foundation
+Status: A1-A12 guarded agent + music evidence foundation
 Date: 2026-09-11
 
 ## Purpose
@@ -12,8 +12,8 @@ reversible, capability-driven and isolated from the host.
 ## Design decision
 
 Keep the ST core small and stable rather than forking a large agent framework. Model providers,
-OpenHands, GitHub and future music-domain capabilities attach through explicit adapters. External
-frameworks must not bypass ST-owned policy, tool, budget, approval or sandbox boundaries.
+OpenHands, GitHub and music-domain capabilities attach through explicit adapters. External
+frameworks must not bypass ST-owned policy, tool, budget, approval, evidence or sandbox boundaries.
 
 ## A1-A3 — Core, routing and policy
 
@@ -132,6 +132,79 @@ TLS termination and deployment lifecycle remain host concerns; the library suppl
 validated OpenHands configuration and ST dispatch core. This keeps network privilege out of the
 agent package while establishing the exact interoperability boundary.
 
+## A12 — Music-domain evidence contracts
+
+A12 is the first direct connection to ST music-engine repositories. The connection is read-only
+and evidence-first: agents receive bounded snapshots sourced from repository-owned current-truth
+or executable-contract files instead of inferring readiness from arbitrary source text.
+
+`music_evidence.py` defines the versioned snapshot contract (`1.0.0`):
+
+- project identifier;
+- authority class;
+- explicit state and summary;
+- bounded claims and warnings;
+- optional next-safe-boundary text;
+- one or more provenance sources containing repository, ref, path and Git blob SHA.
+
+`music_adapters.py` adds two domain adapters and model-callable read tools.
+
+### Score Restore evidence
+
+Tool: `music.score_restore.snapshot`
+
+Source repository: `khfy7wpr5p-maker/st-score-restore-engine`
+
+Primary source:
+`docs/live/ST_SCORE_RESTORE_STAGE11_V2_SYMBOL_PRESERVATION_CURRENT_TRUTH.json`
+
+The adapter accepts only the supported current-truth artifact/schema and projects selected V2a
+model/evaluation/gate/safety fields. It preserves independent truth boundaries:
+
+- training/evaluation completion does not imply OMR correctness or musical truth;
+- held-out/Stage 9A preservation passes do not imply production authorization;
+- candidate checkpoint freeze is distinct from final model selection;
+- `stage12EntryAuthorized` and `productionInferenceAuthorized` are reported directly;
+- missing safety booleans, truncated content or unsupported truth schema fail closed;
+- warnings retain unmet ideal ink-recall target and recorded MSE regression when present.
+
+No training, weight mutation, Stage 12 authorization or production promotion is introduced.
+
+### MusicXML -> Guitar TAB evidence
+
+Tool: `music.tab_engine.capability_snapshot`
+
+Source repository: `khfy7wpr5p-maker/musicxml-to-guitar-tab-engine`
+
+Sources:
+
+- `src/app/reviewRequiredCapabilityContract.js`
+- `tests/workbenchCapabilityBridge.test.js`
+
+The adapter does not execute JavaScript. It validates bounded executable-contract markers and
+projects the established capability semantics:
+
+- `REVIEW_REQUIRED` is not a global lock;
+- readable MusicXML can keep score rendering available;
+- an available TAB artifact can remain visible/generated during review;
+- review TAB is provisional;
+- canonical TAB/export remain PASS-only;
+- review playback may be approximate;
+- BLOCKED playback remains disabled;
+- edit capabilities remain narrower than score/TAB visibility.
+
+If a required executable marker or corroborating workbench expectation disappears, the adapter
+fails closed until the evidence projection is deliberately updated.
+
+### Composition
+
+`music_factory.py` provides `build_default_music_domain_toolset()`. It creates read-only GitHub
+clients bound to both current ST repositories and returns a `MusicDomainToolset` that can be
+registered into the existing `ToolRegistry`.
+
+Because A11 exports the concrete ToolRegistry manifest, A12 music tools automatically use the same
+provider/OpenHands safety path; there is no parallel music-specific privilege channel.
+
 ## Current flow
 
 ```text
@@ -147,41 +220,44 @@ AgentTask -> ModelRouter -> OpenAICompatibleClient
                           |
                           v
                        ToolRegistry
-                          |
-                ST policy-aware tools
+                    /              \
+                   /                \
+       generic guarded tools      A12 music snapshot tools
+                                   /                 \
+                                  v                   v
+                      Score Restore truth     MusicXML/TAB contract
+                         read-only GitHub        read-only GitHub
 
 OpenHands path:
 OpenHands Agent Server
         |
         | tools=[]
-        | include defaults: finish / think only
+        | finish / think only
         | one MCP server: st_tools
-        | exact filter_tools_regex
+        | exact allowlist from ToolRegistry
         v
-Host Streamable-HTTP MCP sidecar
-        |
-        v
-STToolBridge -> ToolRegistry -> AutonomyPolicy -> GitHub / guarded local tools
-      |              |
-      |              +-> HostApprovalBroker for gated host actions
-      +-> bridge call/time budget
+Host MCP sidecar -> STToolBridge -> ToolRegistry
+                                      |
+                                      +-> same A12 music snapshot tools
+
+Mutation path remains separate:
+ActionRequest -> AutonomyPolicy -> reversible feature-branch write OR host approval gate
 
 Executable local code -> GuardedCommandRunner -> SandboxBackend -> disposable Docker
 Tool evidence -> sanitized RunJournal -> SHA-256 hash chain
 ```
 
-## A12 continuation
+## A13 continuation
 
-1. Implement a deployable Streamable HTTP MCP sidecar around `STToolBridge`, with authenticated
-   startup, protocol-version negotiation and no ambient host privileges.
-2. Add end-to-end OpenHands Agent Server integration tests against that sidecar, verifying that
-   `terminal`/`file_editor` cannot appear or execute.
-3. Add fake/local GitHub API integration fixtures covering read -> branch -> write -> human-gated
-   PR flows.
+1. Add Score Editor and real-time score-following read/evidence adapters using the same provenance
+   and fail-closed snapshot contract.
+2. Add cross-project planner inputs that consume music snapshots but cannot directly promote,
+   train or export domain artifacts.
+3. Add synthetic/local integration fixtures for Score Restore and MusicXML/TAB evidence reads.
 4. Add resumable orchestration state linking journal, budget snapshot and approval tickets without
    persisting provider hidden reasoning.
-5. Begin music-domain tool/evidence contracts for Score Restore, MusicXML/TAB, Score Editor and
-   real-time score following.
+5. Only after read semantics stabilize, define explicit music-domain mutation/action contracts;
+   keep training/promotion and canonical student-facing export behind dedicated human gates.
 
 ## Architectural invariants
 
@@ -206,5 +282,8 @@ Tool evidence -> sanitized RunJournal -> SHA-256 hash chain
 19. OpenHands raw terminal/editor tools are absent from the bridged agent configuration.
 20. OpenHands MCP discovery is filtered to the concrete ST registry manifest plus finish/think.
 21. External agent frameworks cannot bypass ST policy, budget or isolation.
-22. Music-specific intelligence remains above generic execution infrastructure.
-23. Tests define safety behavior before capability is widened.
+22. Music evidence is source-provenanced and cannot silently overstate project readiness.
+23. Evaluation success never implicitly authorizes Score Restore production/Stage 12.
+24. REVIEW_REQUIRED never implicitly authorizes canonical TAB export.
+25. Music-specific intelligence remains above generic execution infrastructure.
+26. Tests define safety behavior before capability is widened.
