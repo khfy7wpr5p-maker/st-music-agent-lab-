@@ -1,34 +1,18 @@
 # ST Music Agent Lab
 
-Model-agnostic orchestration core and runnable operator application for autonomous
-software-engineering and music-intelligence work across ST projects.
+Model-agnostic orchestration core and runnable operator application for software-engineering and
+music-intelligence work across ST projects.
 
 ## Current stage
 
-A1-A26 guarded agent + verified evidence/learning/training/model-runtime/canonical-baseline
-stability/drift/rollback-recovery foundation, plus **APP1 runnable Operator Console**:
+The repository contains the A1-A26 guarded model lifecycle plus the runnable application layer:
 
-- **A1-A11:** guarded execution, deterministic privilege policy, budgets, approvals, sandboxing,
-  bounded GitHub mutation and restricted OpenHands integration.
-- **A12-A13:** read-only source-provenanced evidence from Score Restore, MusicXML/TAB, Score Editor
-  and real-time score following.
-- **A14-A18:** deterministic planning + independent verification, verified experience learning,
-  paired evaluation, exact execution evidence and curated dataset export.
-- **A19-A20:** reproducible training-run lineage, immutable trained-model candidate identity and
-  independent promotion-review recomputation.
-- **A21-A23:** resumable lifecycle, activation receipts, runtime health, canonical review and
-  separately authorized canonicalization receipts.
-- **A24:** repeated post-canonical stability evidence plus append-only baseline registry lineage.
-- **A25:** long-term drift/regression watch and host-reviewed rollback requests bound to the exact
-  registered predecessor.
-- **A26:** separately authorized rollback execution receipts, repeated post-rollback recovery and
-  append-only rollback generations that retain the failed baseline in history.
-- **APP1:** dependency-free web Operator Console for live project evidence, safety/capability state,
-  and independently verified portfolio planning.
+- **APP1:** project evidence dashboard + independently verified portfolio planning;
+- **APP2:** opt-in, loopback-only guarded engineering tasks on a host-bound feature branch.
 
-Package version: `0.25.0`.
+Package version: `0.26.0`.
 
-## Run the application
+## Run read / preview mode
 
 ```bash
 python -m pip install -e '.[dev]'
@@ -37,116 +21,76 @@ st-music-agent app
 
 Open `http://127.0.0.1:8765`.
 
-The first runnable UI shows the four ST music projects, repository-backed evidence, warnings, next
-safe boundaries, and a fresh deterministic plan that must pass the existing independent verifier.
-Private repository reads can use `GITHUB_TOKEN`; the token itself is never rendered into the UI.
+This mode reads the four ST project evidence surfaces, shows warnings/next-safe-boundaries, builds a
+fresh deterministic plan, and can preview an engineering task. It cannot create branches or write
+files.
 
-APP1 deliberately exposes no mutation endpoint yet. It is a real read/plan application rather than
-a UI that pretends unsafe execution is available.
+## Run guarded feature-branch tasks
+
+```bash
+st-music-agent app \
+  --enable-writes \
+  --provider-base-url https://YOUR_PROVIDER/v1 \
+  --provider-model YOUR_MODEL \
+  --provider-api-key-env PROVIDER_API_KEY \
+  --github-token-env GITHUB_TOKEN
+```
+
+Write mode is accepted only on a loopback host. The provider/GitHub values above are environment
+variable names; credential values stay inside trusted adapters.
+
+APP2 performs this bounded flow:
+
+```text
+instruction
+  -> preview exact repo + main SHA + deterministic feature branch
+  -> AutonomyPolicy verifies branch/write = auto_execute and PR = require_human
+  -> user clicks run
+  -> host creates exact st-agent/... feature branch
+  -> model gets bounded repository reads + task.write_file
+  -> task.write_file is host-bound to that exact feature branch
+  -> branch head / workflow evidence returned
+  -> user may explicitly click Open PR
+  -> merge remains unavailable
+```
+
+The model is never given a branch-selection field for writes and never receives create-PR, merge,
+deploy, training, activation, canonicalization or rollback tools.
 
 ## Core safety model
 
-The model never decides its own privilege level. Read-only work may run autonomously and reversible
-feature-branch writes may run autonomously; protected/destructive/external operations remain host
-or human gated.
+Read-only work may run autonomously. Reversible feature-branch writes may run when the deterministic
+policy says `auto_execute`. Protected-branch, destructive and external side effects remain host or
+human gated.
 
-No model-facing tool can directly:
+The application still has no endpoint for:
 
-- start training;
-- promote or activate a checkpoint;
-- switch the serving model;
-- canonicalize a new baseline;
-- execute rollback.
+- merge or direct `main`/`master` writes;
+- file deletion;
+- deployment/release;
+- model training or production activation;
+- canonicalization or rollback execution.
 
-Every widening step is represented by a typed, evidence-bound contract and independently verified
-before the next boundary may open.
+A successful APP2 development task is evidence, not production authority.
 
 ## Music-domain evidence
 
-`build_default_music_domain_toolset()` exposes read-only snapshots for:
+The operator console reads bounded snapshots from:
 
-- `music.score_restore.snapshot`
-- `music.tab_engine.capability_snapshot`
-- `music.score_editor.snapshot`
-- `music.score_following.snapshot`
+- Score Restore;
+- MusicXML → Guitar TAB;
+- Score Editor;
+- Real-Time Score Following.
 
-The evidence plane does not inflate authority: evaluation is not production permission,
-REVIEW_REQUIRED is not canonical TAB export, editor feature completion is not release/cutover, and
-score-following research is not pedagogical or production authority.
+One inaccessible repository is isolated to its project card. The verified plan is shown only after
+independent deterministic recomputation passes.
 
-## Verified lifecycle
+## Model lifecycle
 
-```text
-source-provenanced music evidence
-        ↓
-deterministic planner → independent verifier
-        ↓
-guarded execution → exact commit + CI + validators
-        ↓
-verified execution evidence → curated dataset
-        ↓
-reproducible training contract + separate host authorization
-        ↓
-immutable model candidate
-        ↓
-paired baseline/candidate benchmark → promotion review
-        ↓
-activation request → separate host activation → activation receipt
-        ↓
-serving identity + health + shadow quality + rollback readiness
-        ↓
-canonical baseline review → separate host canonicalization
-        ↓
-3+ post-canonical stability rounds → Baseline Registry
-        ↓
-recurring drift watch
-        ↓
-healthy / observe / rollback review request
-        ↓
-separate host rollback action → rollback execution receipt
-        ↓
-2+ serving identity + health + recovery rounds
-        ↓
-append-only rollback generation
-```
-
-A25 does not allow a single bad observation to trigger rollback review. It requires sustained
-regression and exact registry lineage. A26 still does not execute rollback: it records a separately
-authorized external rollback only when the observed serving target exactly matches the approved
-predecessor.
-
-A successful rollback receipt is also insufficient for registry mutation. At least two ordered
-post-rollback recovery rounds must pass. Baseline Registry then appends a new `rollback` generation
-while retaining the degraded canonical generation as immutable history.
-
-## Application boundary
-
-APP1 sits above the A1-A26 core rather than bypassing it:
-
-```text
-browser
-  ↓
-Operator Console HTTP boundary
-  ↓
-read-only evidence adapters + PortfolioPlanningService
-  ↓
-A1-A26 guarded core
-```
-
-All current HTTP write methods fail closed. The next application stage will connect guarded
-feature-branch task execution behind explicit task preview, policy decision and approval state.
-
-## Resumable evidence state
-
-`OrchestrationStateStore` hash-chains the model lifecycle through `baseline_registered`. Recurring
-operational evidence uses `OperationalWatchStateStore`:
-
-`baseline_bound -> drift_reviewed -> rollback_review_requested -> rollback_execution_recorded
--> post_rollback_recovery_reviewed -> rollback_baseline_registered`
-
-Healthy watches may stop at `drift_reviewed`. Prompts, provider messages and hidden reasoning are
-not stored as lifecycle evidence. Stage skipping, regression and silent replacement of prior
-evidence fail closed.
+The existing A1-A26 core remains authoritative for evidence, planning, execution records, curated
+data, training lineage, model candidates, activation, canonicalization, baseline stability, drift,
+rollback review, rollback receipts and post-rollback recovery. APP1/APP2 sit above that core rather
+than replacing its policy or approval boundaries.
 
 ## Development
 
