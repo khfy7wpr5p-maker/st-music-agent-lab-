@@ -1,6 +1,6 @@
 # ST Music Agent Lab — Architecture Map
 
-Status: A1-A22 guarded agent + verified planning/learning/evaluation/data/training/model-runtime foundation
+Status: A1-A23 guarded agent + verified planning/learning/evaluation/data/training/model-runtime/canonical-baseline foundation
 Date: 2026-09-11
 
 ## Purpose
@@ -8,179 +8,139 @@ Date: 2026-09-11
 ST Music Agent Lab is a model-agnostic engineering and music-intelligence agent layer. Models,
 OpenHands, GitHub and ST music projects attach through explicit adapters while ST-owned policy,
 tool, budget, approval, evidence, verification, learning, evaluation, execution, dataset,
-training, model-candidate, orchestration, activation-request, activation-receipt and runtime-health
-boundaries remain authoritative.
+training, model-candidate, orchestration, activation and canonical-baseline boundaries remain
+authoritative.
 
-## A1-A11 — Guarded execution foundation
+## A1-A11 — Guarded execution
 
-- A1-A3: task/model/action contracts, capability routing and deterministic privilege policy.
-- A4-A6: provider/OpenHands boundaries, repository-confined workspace and hardened disposable
-  sandbox execution.
-- A7-A8: explicit ToolRegistry, bounded/redacted output, SHA-256 hash-chained journal, provider
-  tool loop and bounded GitHub reads.
-- A9-A10: reversible feature-branch mutations, cumulative run budgets and exact one-shot host
-  approvals.
-- A11: restricted OpenHands bridge; raw terminal/editor authority is absent.
+- task/model/action contracts and deterministic privilege policy;
+- provider/OpenHands boundaries, repository-confined workspace and hardened sandbox;
+- explicit `ToolRegistry`, bounded/redacted output and SHA-256 hash-chained journal;
+- reversible feature-branch mutation only, run budgets and exact one-shot host approvals;
+- restricted OpenHands bridge with no raw terminal/editor authority.
 
-## A12-A13 — Four-project music evidence plane
+## A12-A13 — Four-project music evidence
 
-Read-only, source-provenanced snapshots cover Score Restore, MusicXML/Guitar TAB, Score Editor and
-Real-Time Score Following. Evidence cannot silently inflate authority: evaluation does not imply
-production, REVIEW_REQUIRED does not imply canonical export, editor feature completion does not
-imply release/cutover and research evidence does not imply production/pedagogical authority.
+Read-only source-provenanced snapshots cover Score Restore, MusicXML/Guitar TAB, Score Editor and
+Real-Time Score Following. Evidence is authority-bounded: evaluation does not imply production,
+REVIEW_REQUIRED does not imply canonical export, editor completion does not imply release/cutover
+and research evidence does not imply pedagogical or production authority.
 
-## A14-A16 — Planning, experience and evaluation
+## A14-A18 — Planning, learning and curated data
 
-`CrossProjectPlanner` uses explicit policy and `CrossProjectVerifier` independently recomputes the
-plan. `ExperienceStore` is trusted-host-write-only and advisory. `LearningEvaluationGate` compares
-baseline/candidate on identical paired cases and rejects regressions or critical failures.
+- A14: deterministic portfolio planner + independent recomputation verifier;
+- A15: host-write-only verified experience store with advisory learning only;
+- A16: paired baseline/candidate benchmark gate with zero-regression policy;
+- A17: exact execution evidence bound to plan, repository, branch, commit, CI and validators;
+- A18: curated structured dataset export with training/promotion authority kept false.
 
-Passing A16 means only `eligible_for_host_review`; no automatic policy/model promotion exists.
+## A19-A20 — Training and model candidate lineage
 
-## A17-A18 — Exact execution evidence and dataset boundary
+A19 binds an exact dataset manifest, base-model artifact, trainer config, seed and training-code
+commit into one reproducible training input fingerprint. A separately authorized completed run
+binds a checkpoint SHA-256 to that exact input.
 
-`ExecutionOutcomeStore` binds execution to exact plan candidate, repository, branch, commit SHA,
-CI and validators. `CuratedDatasetBuilder` exports explicitly selected verified records only.
-Free-form notes and hidden reasoning are excluded. Dataset manifests never authorize training or
-promotion.
+A20 registers immutable model candidate lineage and independently recomputes A16 before a model can
+become `eligible_for_activation_review`. Activation remains unauthorized.
 
-## A19 — Reproducible training run
+## A21 — Activation request + resumable orchestration
 
-`TrainingRunSpec` binds an exact fine-tuning-candidate dataset manifest to base-model identity,
-artifact SHA-256, trainer config, seed and training-code commit. A separately authorized completed
-run binds one resulting checkpoint SHA-256 to that exact input fingerprint. Training completion
-never grants promotion authority.
+A21 adds a hash-chained `OrchestrationStateStore` and an explicit activation request. The request
+binds exact candidate, current baseline and rollback identities but always keeps
+`activation_authorized=false`, `auto_activate=false` and `canonicalization_authorized=false`.
 
-## A20 — Immutable model candidate + promotion review
+## A22 — Activation receipt + runtime health
 
-`ModelCandidateRegistry` derives deterministic `model:<lineage_sha256>` identities from verified
-training/checkpoint lineage. `ModelPromotionReviewGate` reruns A16 itself and rejects claimed
-reports that differ from recomputation.
+A22 records separately executed host activation outcomes and requires four runtime checks:
 
-Passing A20 means only `eligible_for_activation_review`; activation remains unauthorized.
+- serving identity;
+- health;
+- shadow quality;
+- rollback readiness.
 
-## A21 — Resumable orchestration + activation request
+All four must succeed to become only `eligible_for_canonical_review`. No deployment, rollback or
+canonicalization executor is model-callable.
 
-`OrchestrationStateStore` persists only structured ids/fingerprints in the SHA-256 hash-chained
-journal. It stores no prompts, provider messages or hidden reasoning.
+## A23 — Canonical baseline review + canonicalization receipt
 
-A21 stages:
+`CanonicalBaselineReviewGate` receives the exact A22 activation receipt, exact runtime checks and
+claimed shadow-health report, then reruns A22 verification. It also verifies that the currently
+authoritative canonical baseline and rollback target still equal the pre-activation baseline.
 
-1. `plan_verified`
-2. `execution_verified`
-3. `dataset_curated`
-4. `training_completed`
-5. `model_registered`
-6. `promotion_reviewed`
-7. `activation_requested`
+A pass yields only `eligible_for_host_canonicalization`. The review always has:
 
-`ActivationRequestBuilder` binds exact candidate/checkpoint, current baseline, rollback target,
-promotion-review fingerprint and target environment. Rollback must equal the exact current
-baseline. Every request has `human_approval_required=true`, `activation_authorized=false`,
-`auto_activate=false`, `canonicalization_authorized=false`.
+- `human_approval_required=true`;
+- `canonicalization_authorized=false`;
+- `auto_canonicalize=false`.
 
-## A22 — Activation receipt
+`CanonicalizationReceiptBuilder` records a separately authorized host canonical-baseline action.
+Before recording it, the builder recomputes the A23 review from the original A22 evidence.
 
-`ActivationReceiptBuilder` records the result of an externally executed host activation action. It
-does not perform deployment.
+The receipt binds exact old/new baseline identities, rollback identity, environment, host approval,
+canonicalization reference and evidence. Outcomes are `canonicalized`, `failed` and `rolled_back`.
+A successful canonicalization requires the observed canonical id/checkpoint to exactly equal the
+candidate and sets `post_canonical_health_required=true`.
 
-The receipt binds the exact A21 request to:
+Automatic canonicalization and automatic rollback remain false.
 
-- candidate id/checkpoint;
-- target environment;
-- previous baseline and rollback id/checkpoint;
-- host authorization reference;
-- deployment reference;
-- explicit evidence references;
-- observed serving model/checkpoint.
-
-`activated` requires observed serving identity to equal the requested candidate. `rolled_back`
-requires observed identity to equal the rollback target. `failed` cannot claim a serving model.
-Every receipt keeps `canonicalization_authorized=false` and `auto_canonicalize=false`.
-
-## A22 — Shadow health and rollback readiness gate
-
-`ShadowHealthGate` requires exactly four evidence-bearing runtime checks:
-
-1. `serving_identity`
-2. `health`
-3. `shadow_quality`
-4. `rollback_readiness`
-
-Each is `success`, `failure` or `unavailable`. Any failure or unavailable result rejects the
-candidate. Four successes yield only `eligible_for_canonical_review`.
-
-The report remains human-gated with `canonicalization_authorized=false` and
-`auto_canonicalize=false`. It is deterministic and independently recomputable.
-
-A22 extends orchestration with:
-
-8. `activation_recorded`
-9. `shadow_health_reviewed`
-
-Prior evidence remains immutable and only receipt/report fingerprints are persisted.
-
-## Current lifecycle
+## Resumable lifecycle
 
 ```text
 music evidence
-    |
-Planner -> Verifier
-    |
-verified execution -> exact commit/CI/validators
-    |
-ExecutionOutcomeStore -> Experience / paired evaluation
-    |
-CuratedDatasetBuilder
-    |
-TrainingRunSpec -> separately authorized host training -> TrainingRunCompletion
-    |
-ModelCandidateRegistry
-    |
-A16 benchmark -> ModelPromotionReviewGate
-    |
-eligible_for_activation_review
-    |
-ActivationRequestBuilder
-    |
-separate human/host activation
-    |
-ActivationReceiptBuilder
-    |
-serving identity + health + shadow quality + rollback readiness
-    |
-ShadowHealthGate
-    |
-rejected / eligible_for_canonical_review
-    |
-canonicalization still NOT authorized
+  -> planner
+  -> independent verifier
+  -> guarded execution + CI/validators
+  -> execution evidence
+  -> curated dataset
+  -> training contract + authorized training completion
+  -> immutable model candidate
+  -> paired benchmark
+  -> promotion review
+  -> activation request
+  -> separately authorized activation
+  -> activation receipt
+  -> shadow/health gate
+  -> canonical baseline review
+  -> separately authorized canonicalization
+  -> canonicalization receipt
 ```
 
-## A23 continuation
+`OrchestrationStateStore` records structured fingerprints through:
 
-1. Add an explicit canonical-baseline review contract consuming one exact A22 passing report.
-2. Require a separate host/human canonicalization authorization and record the exact previous and
-   new baseline identities.
-3. Record canonicalization/rollback receipts without exposing serving credentials to models.
-4. Add post-canonical stability evidence before the new baseline can be treated as durable history.
-5. Keep actual serving changes, deployment credentials and rollback execution outside model tools.
+`plan_verified -> execution_verified -> dataset_curated -> training_completed -> model_registered
+-> promotion_reviewed -> activation_requested -> activation_recorded -> shadow_health_reviewed
+-> canonical_reviewed -> canonicalization_recorded`
+
+Stage skipping, stage regression and silent replacement of prior evidence fail closed.
+
+## A24 continuation
+
+1. Add post-canonical health/stability evidence after a successful A23 canonicalization.
+2. Add an immutable baseline-registry snapshot binding the new canonical model to the superseded
+   baseline and rollback history.
+3. Require sustained post-canonical evidence before the new baseline becomes the unquestioned
+   reference for subsequent learning/training cycles.
+4. Keep serving credentials, actual model switches and rollback execution outside model-callable
+   tools.
+5. Preserve human/host gates for production-impacting canonical changes.
 
 ## Architectural invariants
 
-1. Models cannot grant themselves privileges, approvals, training, promotion, activation or canonicalization.
-2. Unknown tools never execute and external frameworks cannot bypass ST policy/budget/isolation.
-3. Music evidence remains source-provenanced and authority-bounded.
-4. Plans are deterministic/versioned and independently recomputed.
-5. Execution success requires exact commit/CI/validator evidence.
-6. Hidden reasoning is never persisted as learning/training/orchestration data.
-7. Candidate improvements require paired non-regressing evaluation.
-8. Dataset export never authorizes training/promotion.
-9. Training inputs bind exact reproducibility inputs and never auto-start.
-10. Model identities derive from immutable training/checkpoint lineage.
-11. Promotion review independently recomputes evaluation and never activates candidates.
-12. Orchestration state is resumable, hash chained and cannot replace prior evidence.
-13. Activation requests require exact current-baseline rollback binding.
-14. Activation receipts record external host actions but cannot canonicalize models.
-15. Runtime health requires exact serving, health, shadow-quality and rollback-readiness evidence.
-16. Runtime success yields only canonical-review eligibility, never canonicalization authority.
+1. Models cannot grant themselves privileges, approvals, training, promotion, activation or
+   canonicalization.
+2. Unknown/unregistered tools never execute.
+3. External frameworks cannot bypass ST policy, budget, approval or isolation boundaries.
+4. Music evidence remains source-provenanced and authority-bounded.
+5. Plans are deterministic/versioned and independently recomputed.
+6. Execution success requires exact commit/CI/validator evidence.
+7. Learning history is verified and advisory; hidden reasoning is not learning data.
+8. Candidate improvements must survive paired non-regressing evaluation.
+9. Dataset export never authorizes training or promotion.
+10. Training/checkpoint lineage is reproducible and immutable.
+11. Promotion review never activates a candidate.
+12. Activation requests and receipts preserve exact rollback identity.
+13. Runtime-health evidence is required before canonical review.
+14. Canonical review independently rechecks A22 evidence and current-baseline identity.
+15. Canonicalization receipt requires separate host authorization and exact observed baseline.
+16. Automatic canonicalization and automatic rollback remain disabled.
 17. Tests define safety behavior before capability is widened.
