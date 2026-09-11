@@ -3,7 +3,6 @@ from __future__ import annotations
 from st_music_agent.app3_task_execution import App3TaskService
 from st_music_agent.task_state import ProjectExecutionProfile
 
-
 HEAD = "b" * 40
 PROFILE = ProjectExecutionProfile(project="score_restore")
 
