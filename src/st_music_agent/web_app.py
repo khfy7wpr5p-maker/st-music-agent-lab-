@@ -149,7 +149,7 @@ class OperatorConsoleApplication:
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise ValueError("request body must be valid UTF-8 JSON") from exc
         if not isinstance(decoded, dict):
-            raise ValueError("request JSON must be an object")
+            raise TypeError("request JSON must be an object")
         return decoded
 
     @staticmethod
