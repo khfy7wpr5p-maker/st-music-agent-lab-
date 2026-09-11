@@ -14,7 +14,6 @@ from .learning_evaluation import (
     PromotionDecision,
 )
 from .training_run import (
-    TRAINING_RUN_SCHEMA_VERSION,
     TrainingRunCompletion,
     TrainingRunContractError,
     TrainingRunOutcome,
