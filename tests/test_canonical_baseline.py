@@ -11,9 +11,9 @@ from st_music_agent.activation_request import ActivationRequestBuilder
 from st_music_agent.canonical_baseline import (
     CanonicalBaselineError,
     CanonicalBaselineReviewGate,
-    CanonicalReviewDecision,
     CanonicalizationOutcome,
     CanonicalizationReceiptBuilder,
+    CanonicalReviewDecision,
 )
 from st_music_agent.model_candidate import (
     MODEL_CANDIDATE_SCHEMA_VERSION,
