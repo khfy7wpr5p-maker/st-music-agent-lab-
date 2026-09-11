@@ -69,6 +69,13 @@ def _require_repository(client: GitHubReadClient, expected: str) -> None:
         )
 
 
+def _bool_field(section: Mapping[str, Any], key: str, label: str) -> bool:
+    value = section.get(key)
+    if not isinstance(value, bool):
+        raise MusicEvidenceError(f"{label} must be a boolean")
+    return value
+
+
 @dataclass(slots=True)
 class ScoreRestoreEvidenceAdapter:
     client: GitHubReadClient
@@ -94,6 +101,38 @@ class ScoreRestoreEvidenceAdapter:
         if not all(isinstance(value, Mapping) for value in (v2a, gates, safety, config)):
             raise MusicEvidenceError("Score Restore current-truth sections are incomplete")
 
+        production_authorized = _bool_field(
+            gates,
+            "productionInferenceAuthorized",
+            "productionInferenceAuthorized",
+        )
+        stage12_authorized = _bool_field(
+            gates,
+            "stage12EntryAuthorized",
+            "stage12EntryAuthorized",
+        )
+        final_model_selected = _bool_field(gates, "finalModelSelected", "finalModelSelected")
+        candidate_frozen = _bool_field(
+            gates,
+            "candidateCheckpointFrozen",
+            "candidateCheckpointFrozen",
+        )
+        omr_not_implied = _bool_field(
+            safety,
+            "omrCorrectnessNotImplied",
+            "omrCorrectnessNotImplied",
+        )
+        musical_truth_not_implied = _bool_field(
+            safety,
+            "musicalTruthNotImplied",
+            "musicalTruthNotImplied",
+        )
+        automatic_promotion_forbidden = _bool_field(
+            safety,
+            "automaticProductionPromotionForbidden",
+            "automaticProductionPromotionForbidden",
+        )
+
         claims = {
             "schema_version": payload.get("schemaVersion"),
             "generated_on": payload.get("generatedOn"),
@@ -106,10 +145,10 @@ class ScoreRestoreEvidenceAdapter:
             "heldout_preservation_gate_passed": v2a.get("heldoutPreservationGatePassed"),
             "stage9a_status": v2a.get("stage9aStatus"),
             "stage9a_proxy_only": v2a.get("stage9aProxyOnly"),
-            "candidate_checkpoint_frozen": gates.get("candidateCheckpointFrozen"),
-            "final_model_selected": gates.get("finalModelSelected"),
-            "stage12_entry_authorized": gates.get("stage12EntryAuthorized"),
-            "production_inference_authorized": gates.get("productionInferenceAuthorized"),
+            "candidate_checkpoint_frozen": candidate_frozen,
+            "final_model_selected": final_model_selected,
+            "stage12_entry_authorized": stage12_authorized,
+            "production_inference_authorized": production_authorized,
             "heldout_ink_recall_delta": v2a.get("heldoutInkRecallDelta"),
             "heldout_pixel_l1_improvement_percent": v2a.get(
                 "heldoutPixelL1ImprovementPercent"
@@ -119,11 +158,9 @@ class ScoreRestoreEvidenceAdapter:
             ),
             "ideal_ink_recall_target_reached": v2a.get("idealInkRecallTargetReached"),
             "mse_regression_observed": v2a.get("mseRegressionObserved"),
-            "omr_correctness_implied": not bool(safety.get("omrCorrectnessNotImplied")),
-            "musical_truth_implied": not bool(safety.get("musicalTruthNotImplied")),
-            "automatic_production_promotion_forbidden": safety.get(
-                "automaticProductionPromotionForbidden"
-            ),
+            "omr_correctness_implied": not omr_not_implied,
+            "musical_truth_implied": not musical_truth_not_implied,
+            "automatic_production_promotion_forbidden": automatic_promotion_forbidden,
         }
 
         warnings: list[str] = []
@@ -131,9 +168,9 @@ class ScoreRestoreEvidenceAdapter:
             warnings.append("ideal ink-recall target has not been reached")
         if claims["mse_regression_observed"] is True:
             warnings.append("MSE regression remains explicitly recorded")
-        if claims["production_inference_authorized"] is not True:
+        if production_authorized is not True:
             warnings.append("production inference remains unauthorized")
-        if claims["stage12_entry_authorized"] is not True:
+        if stage12_authorized is not True:
             warnings.append("Stage 12 entry remains unauthorized")
 
         next_boundary = payload.get("nextSafeBoundary")
