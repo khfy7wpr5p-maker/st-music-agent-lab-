@@ -1,275 +1,190 @@
 # ST Music Agent Lab — Architecture Map
 
-Status: A1-A20 guarded agent + verified planning/learning/evaluation/data/training/model-candidate foundation
+Status: A1-A21 guarded agent + verified planning/learning/evaluation/data/training/model-lifecycle foundation
 Date: 2026-09-11
 
 ## Purpose
 
-ST Music Agent Lab is a model-agnostic engineering and music-intelligence agent layer. It
-coordinates models and tools around ST repositories while keeping autonomy observable,
-reversible, capability-driven and isolated from the host.
+ST Music Agent Lab is a model-agnostic engineering and music-intelligence agent layer. Models,
+OpenHands, GitHub and ST music projects attach through explicit adapters while ST-owned policy,
+tool, budget, approval, evidence, verification, learning, evaluation, execution, dataset,
+training, model-candidate, orchestration and activation-request boundaries remain authoritative.
 
-## Core design
-
-The ST core stays small and framework-independent. Models, OpenHands, GitHub and music projects
-attach through explicit adapters. No external framework may bypass ST-owned policy, tool, budget,
-approval, evidence, verification, learning, evaluation, execution-evidence, dataset, training-run,
-model-candidate or sandbox boundaries.
-
-## A1-A6 — Core execution and isolation
+## A1-A11 — Guarded execution foundation
 
 - A1-A3: task/model/action contracts, capability routing and deterministic privilege policy.
-- A4: provider-neutral execution, credentials/transport boundaries and OpenHands REST adapter.
-- A5: repository-confined workspace and narrow command classifier.
-- A6: disposable hardened Docker sandbox with network disabled and resource limits.
-
-## A7-A11 — Tool boundary, controlled mutation and OpenHands
-
-- A7: explicit `ToolRegistry`, bounded/redacted output and SHA-256 hash-chained run journal.
-- A8: canonical provider tool loop and bounded read-only GitHub surface.
-- A9: only reversible feature-branch GitHub mutations are model-callable; protected/destructive
-  actions remain gated and merge is not a model tool.
-- A10: cumulative run budgets and opaque one-shot exact host approvals.
-- A11: OpenHands connects only through the restricted ST MCP bridge; raw TerminalTool and
-  FileEditorTool are absent.
+- A4-A6: provider/OpenHands boundaries, repository-confined workspace and hardened disposable
+  sandbox execution.
+- A7-A8: explicit ToolRegistry, bounded/redacted output, SHA-256 hash-chained journal, provider
+  tool loop and bounded GitHub reads.
+- A9-A10: reversible feature-branch mutations, cumulative run budgets and exact one-shot host
+  approvals.
+- A11: restricted OpenHands bridge; raw terminal/editor authority is absent.
 
 ## A12-A13 — Four-project music evidence plane
 
-`MusicEvidenceSnapshot` schema `1.1.0` carries project/authority/state, bounded claims/warnings,
-next-safe-boundary and source provenance (`repository`, `ref`, `path`, Git blob SHA).
+Read-only, source-provenanced snapshots cover Score Restore, MusicXML/Guitar TAB, Score Editor and
+Real-Time Score Following. Evidence cannot silently inflate authority: evaluation does not imply
+production, REVIEW_REQUIRED does not imply canonical export, editor feature completion does not
+imply release/cutover and research evidence does not imply production/pedagogical authority.
 
-Read-only tools:
+## A14 — Deterministic portfolio planner + verifier
 
-- `music.score_restore.snapshot`
-- `music.tab_engine.capability_snapshot`
-- `music.score_editor.snapshot`
-- `music.score_following.snapshot`
-
-Authority invariants:
-
-- Score Restore evaluation/candidate success never implies production or Stage 12 authorization.
-- REVIEW_REQUIRED never implies canonical TAB export.
-- Score Editor feature completion never implies release or SesliTab cutover authorization.
-- Score-following research never implies acoustic-mixture, production or pedagogical authority.
-
-## A14 — Deterministic portfolio planning + verifier
-
-`CrossProjectPlanner` consumes exactly the complete four-project evidence set under policy
-`2026-09-11.v1`. Current order deliberately closes bounded validation/integration uncertainty
-before feature/research expansion:
-
-1. Score Restore consumer/inference integration validation;
-2. MusicXML/TAB teacher-review integration;
-3. Score Editor APP-11G bounded feature work;
-4. Score Following SF-12 research.
-
-Every candidate carries an evidence hash; the plan has an evidence-set hash and deterministic
-`plan_id`. `execution_authorized` is always false.
-
-`CrossProjectVerifier` independently recomputes the plan. Source-SHA drift, changed order/actions,
-policy mismatch or any execution-authorized claim causes FAIL.
-
-Read-only tool: `music.portfolio.plan`.
+`CrossProjectPlanner` consumes the complete four-project evidence set under explicit versioned
+policy. `CrossProjectVerifier` independently recomputes the plan. Source drift, changed actions or
+execution-authorized claims fail closed. `execution_authorized=false` is invariant.
 
 ## A15 — Verified experience learning
 
-`ExperienceStore` is trusted-host-write-only and uses the sanitized hash-chained journal. An
-outcome can be recorded only for the exact PASS-verified plan id and recomputation id.
+`ExperienceStore` is trusted-host-write-only and hash chained. Only outcomes tied to the exact
+PASS-verified plan enter history. `ExperienceAdvisor` emits advisory `prefer`, `observe` or
+`review`; `auto_apply=false` always.
 
-`ExperienceAdvisor` aggregates verified history into `prefer`, `review` or `observe`; all
-recommendations have `auto_apply=false`.
+## A16 — Paired learning evaluation
 
-Read-only tool: `learning.experience.summary`.
-
-The model cannot write/rewrite experience history or automatically change prompts, policy,
-privileges, code or model weights.
-
-## A16 — Paired learning evaluation gate
-
-A16 compares one baseline and one candidate on an identical paired benchmark corpus before the
-candidate can reach host review.
-
-Default policy `2026-09-11.v1` requires >=8 paired cases, >=2 critical cases, exact matching case
-ids/severity, zero regressions, zero candidate critical failures and at least one strict
-improvement. Outcome order is `failure < abstained < success`.
-
-A report can return `eligible_for_host_review` or `rejected`; `auto_promote=false` always.
-
-Read-only model tool: `learning.evaluation.policy`.
+`LearningEvaluationGate` compares baseline and candidate on identical paired cases. Current policy
+requires >=8 cases, >=2 critical cases, identical case/severity definitions, zero regressions, zero
+candidate critical failures and at least one strict improvement. Outcome order is
+`failure < abstained < success`. Passing means only `eligible_for_host_review`.
 
 ## A17 — Exact execution outcome evidence
 
-`ExecutionOutcomeStore` is trusted-host-write-only and hash chained. An `ExecutionObservation`
-must bind to the exact verified plan candidate through plan id, candidate rank, project, exact
-action, candidate evidence hash, expected repository, branch, full commit SHA, CI checks and
-validator checks.
-
-`SUCCESS` requires every CI and validator check to be `success`. `FAILURE` or `ABSTAINED` must
-retain non-green evidence and cannot masquerade as successful execution.
-
-Execution records are historical evidence only. They do not grant production, release, export,
-training or promotion authority.
+`ExecutionOutcomeStore` binds a completed action to exact plan candidate, project/action,
+evidence hash, repository, branch, full commit SHA, CI and validator checks. `SUCCESS` requires all
+supplied CI/validators to succeed. Records are historical evidence, not new authority.
 
 ## A18 — Curated dataset boundary
 
-`CuratedDatasetBuilder` deterministically exports explicitly selected verified execution record
-IDs for `offline_evaluation` or `fine_tuning_candidate` use.
+`CuratedDatasetBuilder` exports only explicitly selected verified execution record IDs. Structured
+operational facts are allowed; free-form notes and hidden reasoning are excluded. Dataset manifests
+always keep `training_authorized=false`, `auto_train=false`, `auto_promote=false`.
 
-Rows contain only structured operational facts. Free-form execution notes, provider messages,
-hidden reasoning and chain-of-thought are not dataset fields.
+## A19 — Reproducible training run
 
-Every export contains a manifest SHA-256 and hard-coded authority fields:
+`TrainingRunSpec` binds a verified fine-tuning-candidate dataset manifest to exact base-model
+identity/revision/artifact SHA-256, trainer name/version/config, seed and training-code Git commit.
+The complete input contract becomes one deterministic `input_fingerprint`.
 
-- `training_authorized=false`;
-- `auto_train=false`;
-- `auto_promote=false`.
+A separately authorized completed run binds that fingerprint to authorization reference,
+checkpoint SHA-256 and training evidence. Completed runs still require evaluation and carry no
+promotion authority.
 
-## A19 — Reproducible training-run contract
+## A20 — Immutable model candidate + promotion review
 
-`TrainingRunSpec` binds an exact reviewed `fine_tuning_candidate` dataset manifest to base-model
-id/revision/artifact SHA-256, trainer name/version/config, deterministic seed and training-code
-commit. The complete input contract is hashed into one `input_fingerprint`.
+`ModelCandidateRegistry` derives a deterministic `model:<lineage_sha256>` identity from verified
+A19 training/checkpoint lineage. Candidates have `evaluation_required=true`,
+`activation_authorized=false`, `auto_activate=false`.
 
-A spec always has `execution_authorized=false` and `auto_start=false`.
+`ModelPromotionReviewGate` independently reruns A16 from baseline/candidate benchmark runs and
+requires the claimed report to match recomputation. A passing result becomes only
+`eligible_for_activation_review`; human review remains required and activation remains false.
 
-If a separately authorized host performs training, `TrainingRunCompletion` binds that exact input
-fingerprint to the host authorization reference, checkpoint SHA-256 and training evidence.
-Completed runs always have `evaluation_required=true`, `promotion_authorized=false` and
-`auto_promote=false`.
+## A21 — Resumable orchestration state
 
-## A20 — Immutable model candidate + promotion review recomputation
+`OrchestrationStateStore` persists only structured evidence identities/fingerprints through the
+existing SHA-256 hash-chained journal. It stores no prompts, provider messages or hidden reasoning.
 
-`ModelCandidateRegistry` accepts only a verified completed A19 training lineage. It independently
-checks the training spec/config/input fingerprint, completion/run linkage, checkpoint SHA-256,
-completion fingerprint and non-promotion authority flags.
+Ordered stages are:
 
-The registry derives a deterministic `model:<lineage_sha256>` candidate id from:
+1. `plan_verified`
+2. `execution_verified`
+3. `dataset_curated`
+4. `training_completed`
+5. `model_registered`
+6. `promotion_reviewed`
+7. `activation_requested`
 
-- checkpoint SHA-256;
-- training run id;
-- training input/completion fingerprints;
-- dataset id + manifest hash;
-- base-model id/revision/artifact SHA-256.
+The state can also attach verified experience/evaluation references after execution. Stage skips
+are rejected, earlier evidence cannot be replaced, and reopening the store re-verifies the journal
+before resuming from the latest state.
 
-Every model candidate has `evaluation_required=true`, `activation_authorized=false` and
-`auto_activate=false`.
+## A21 — Explicit activation request with rollback binding
 
-`ModelPromotionReviewGate` requires:
+`ActivationRequestBuilder` requires an immutable A20 model candidate plus an
+`eligible_for_activation_review` A20 review. It independently verifies candidate/review
+fingerprints and binds:
 
-- one registered model candidate;
-- current baseline benchmark run;
-- candidate benchmark run whose candidate id matches the registered model;
-- claimed A16 evaluation report.
+- exact candidate id/checkpoint;
+- promotion-review fingerprint;
+- exact current-baseline id/checkpoint;
+- rollback id/checkpoint;
+- bounded target environment.
 
-The gate reruns `LearningEvaluationGate.compare()` itself. If the claimed report differs from the
-fresh recomputation, review fails closed.
+Rollback must equal the current baseline identity and checkpoint. Every request is content-addressed
+and always has:
 
-A recomputed A16 pass yields only `eligible_for_activation_review`. The review record still has:
-
-- `human_review_required=true`;
+- `human_approval_required=true`;
 - `activation_authorized=false`;
-- `auto_activate=false`.
+- `auto_activate=false`;
+- `canonicalization_authorized=false`.
 
-A rejected A16 result stays rejected. A20 exposes no activation/deployment tool.
+Creating a request does not deploy, activate, canonicalize or switch a serving model.
 
-## Current decision/learning/training/promotion chain
+## Current lifecycle
 
 ```text
-four project snapshots
+music evidence snapshots
         |
         v
-CrossProjectPlanner -> CrossProjectVerifier
+Planner -> independent Verifier
         |
        PASS
         v
-guarded host execution
-        |
-        v
-exact commit + CI + validators
+guarded execution -> exact commit + CI + validators
         |
         v
 ExecutionOutcomeStore
         |
-        +----> ExperienceStore / Advisor ----> candidate playbook evidence
+        +--> Experience / paired evaluation evidence
         |
         v
 CuratedDatasetBuilder
         |
         v
-fine-tuning-candidate manifest
-        |
-        v
-TrainingRunSpec
-        |
- separate host authorization if training actually runs
-        v
-TrainingRunCompletion
+TrainingRunSpec -- separate host authorization --> TrainingRunCompletion
         |
         v
 ModelCandidateRegistry
         |
         v
-registered immutable model candidate
+A16 baseline/candidate benchmark
         |
-baseline benchmark <---- same cases ----> candidate benchmark
-        |                                      |
-        +--------- LearningEvaluationGate -----+
-                         |
-             rejected / eligible_for_host_review
-                         |
-                         v
-             ModelPromotionReviewGate
-            (independent recomputation)
-                         |
-        rejected / eligible_for_activation_review
-                         |
-      human_review_required=true
-      activation_authorized=false
-      auto_activate=false
+        v
+ModelPromotionReviewGate
+        |
+ eligible_for_activation_review
+        |
+        v
+ActivationRequestBuilder
+        |
+ human approval required; activation still false
+
+OrchestrationStateStore hash-chains evidence pointers across the lifecycle for resume.
 ```
 
-## A21 continuation
+## A22 continuation
 
-1. Add resumable orchestration state linking plan, approvals, execution, experience, evaluation,
-   dataset, training, candidate and promotion-review evidence without hidden reasoning.
-2. Add a separate explicit activation request contract that references an exact A20 review record
-   and requires host/human approval; do not activate automatically.
-3. Add rollback identity and previous-baseline binding before any activation can be considered.
-4. Add post-activation shadow/health evidence contracts before a candidate can become canonical.
-5. Keep deployment credentials and actual serving changes outside model-callable tools.
+1. Add post-activation shadow/health evidence contracts before any candidate can become canonical.
+2. Define a separately authorized host activation receipt that binds exact A21 request + deployed
+   artifact + environment + rollback target, without exposing deployment credentials to models.
+3. Require rollback/health evidence before canonical-baseline replacement.
+4. Keep canonicalization and production serving changes outside model-callable tools.
+5. Extend resumable state only with structured receipts/fingerprints, never hidden reasoning.
 
 ## Architectural invariants
 
-1. Model choice is replaceable.
-2. Models cannot grant themselves privileges or approvals.
-3. Unknown/unregistered tools never execute.
-4. Protected/destructive/external actions cannot silently escalate.
-5. Credentials resolve only after policy permits a trusted adapter operation.
-6. Host process execution is not a raw model capability.
-7. Executable repository code runs only through an ST-approved sandbox backend.
-8. Model-facing output/run traffic is bounded and redacted.
-9. Persistent run, experience and execution evidence is sanitized and hash chained.
-10. Provider schemas are not host authorization.
-11. Run budgets fail closed before overflowing the next action.
-12. OpenHands raw terminal/editor capability is absent from the bridged agent configuration.
-13. Music evidence cannot silently overstate readiness or authority.
-14. Portfolio planning is deterministic/versioned and never execution authority.
-15. Portfolio verification independently recomputes accepted plans.
-16. Evidence drift invalidates old plans.
-17. Execution success requires exact candidate/repository/commit/CI/validator evidence.
-18. A failed/skipped validator cannot be hidden inside a successful execution record.
-19. Only exact verified outcomes may enter experience history.
-20. Models cannot write experience history through registered tools.
-21. Experience recommendations never auto-apply.
-22. Hidden provider reasoning is not persisted as learning data.
-23. Learning candidates must use the exact paired benchmark case set/severity as baseline.
-24. Any paired regression or critical failure rejects a learning candidate.
-25. Dataset export never authorizes training or model promotion.
-26. Training inputs bind exact dataset, base-model artifact, trainer config, seed and code commit.
-27. Creating a training spec never authorizes or auto-starts training.
-28. Completed training binds one checkpoint hash to one exact input fingerprint and authorization.
-29. A model candidate id is derived from immutable training/checkpoint lineage.
-30. Model candidates never carry activation authority.
-31. Promotion review recomputes A16 rather than trusting a claimed report.
-32. Promotion-review eligibility never activates or deploys a candidate.
-33. Tests define safety behavior before capability is widened.
+1. Models cannot grant themselves privileges, approvals, training, promotion or activation.
+2. Unknown tools never execute and external frameworks cannot bypass ST policy/budget/isolation.
+3. Music evidence remains source-provenanced and authority-bounded.
+4. Plans are deterministic/versioned and independently recomputed.
+5. Execution success requires exact commit/CI/validator evidence.
+6. Experience history is verified and advisory only; hidden reasoning is not learning data.
+7. Candidate improvements require paired non-regressing evaluation.
+8. Dataset export never authorizes training/promotion.
+9. Training specs bind exact reproducibility inputs and do not auto-start.
+10. Model candidate identities derive from immutable training/checkpoint lineage.
+11. Promotion review recomputes evaluation and does not activate candidates.
+12. Orchestration state is resumable, hash chained and cannot silently replace prior evidence.
+13. Activation requests require exact current baseline + rollback binding.
+14. Activation-request creation never activates, deploys or canonicalizes a model.
+15. Tests define safety behavior before capability is widened.
