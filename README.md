@@ -1,12 +1,12 @@
 # ST Music Agent Lab
 
-Model-agnostic orchestration core for autonomous software-engineering and music-intelligence
-agents across ST projects.
+Model-agnostic orchestration core and runnable operator application for autonomous
+software-engineering and music-intelligence work across ST projects.
 
 ## Current stage
 
 A1-A26 guarded agent + verified evidence/learning/training/model-runtime/canonical-baseline
-stability/drift/rollback-recovery foundation:
+stability/drift/rollback-recovery foundation, plus **APP1 runnable Operator Console**:
 
 - **A1-A11:** guarded execution, deterministic privilege policy, budgets, approvals, sandboxing,
   bounded GitHub mutation and restricted OpenHands integration.
@@ -23,8 +23,26 @@ stability/drift/rollback-recovery foundation:
   registered predecessor.
 - **A26:** separately authorized rollback execution receipts, repeated post-rollback recovery and
   append-only rollback generations that retain the failed baseline in history.
+- **APP1:** dependency-free web Operator Console for live project evidence, safety/capability state,
+  and independently verified portfolio planning.
 
-Package version: `0.24.0`.
+Package version: `0.25.0`.
+
+## Run the application
+
+```bash
+python -m pip install -e '.[dev]'
+st-music-agent app
+```
+
+Open `http://127.0.0.1:8765`.
+
+The first runnable UI shows the four ST music projects, repository-backed evidence, warnings, next
+safe boundaries, and a fresh deterministic plan that must pass the existing independent verifier.
+Private repository reads can use `GITHUB_TOKEN`; the token itself is never rendered into the UI.
+
+APP1 deliberately exposes no mutation endpoint yet. It is a real read/plan application rather than
+a UI that pretends unsafe execution is available.
 
 ## Core safety model
 
@@ -101,6 +119,23 @@ A successful rollback receipt is also insufficient for registry mutation. At lea
 post-rollback recovery rounds must pass. Baseline Registry then appends a new `rollback` generation
 while retaining the degraded canonical generation as immutable history.
 
+## Application boundary
+
+APP1 sits above the A1-A26 core rather than bypassing it:
+
+```text
+browser
+  ↓
+Operator Console HTTP boundary
+  ↓
+read-only evidence adapters + PortfolioPlanningService
+  ↓
+A1-A26 guarded core
+```
+
+All current HTTP write methods fail closed. The next application stage will connect guarded
+feature-branch task execution behind explicit task preview, policy decision and approval state.
+
 ## Resumable evidence state
 
 `OrchestrationStateStore` hash-chains the model lifecycle through `baseline_registered`. Recurring
@@ -124,6 +159,7 @@ pytest
 See:
 
 - [`docs/architecture.md`](docs/architecture.md)
+- [`docs/operator-console.md`](docs/operator-console.md)
 - [`docs/music-domain-evidence.md`](docs/music-domain-evidence.md)
 - [`docs/planning-and-learning.md`](docs/planning-and-learning.md)
 - [`docs/learning-evaluation.md`](docs/learning-evaluation.md)

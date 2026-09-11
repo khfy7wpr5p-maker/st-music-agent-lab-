@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from collections.abc import Sequence
 
 from .catalog import DEFAULT_MODELS
@@ -9,6 +10,7 @@ from .contracts import AgentTask, ModelProfile, TaskKind
 from .execution import DirectAgentRunner
 from .providers import OpenAICompatibleClient, OpenAICompatibleConfig
 from .router import ModelRouter
+from .web_app import serve_operator_console
 
 
 def _profile(name: str) -> ModelProfile:
@@ -30,7 +32,16 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: Sequence[str] | None = None) -> int:
+def build_app_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="st-music-agent app")
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=8765)
+    parser.add_argument("--github-token-env", default="GITHUB_TOKEN")
+    parser.add_argument("--github-api-base", default="https://api.github.com")
+    return parser
+
+
+def _run_agent(argv: Sequence[str]) -> int:
     args = build_parser().parse_args(argv)
     profile = _profile(args.profile)
     client = OpenAICompatibleClient(
@@ -45,6 +56,24 @@ def main(argv: Sequence[str] | None = None) -> int:
     result = runner.run(AgentTask(args.instruction, kind=TaskKind(args.kind)))
     print(json.dumps(dict(result.message), ensure_ascii=False))
     return 0
+
+
+def _run_app(argv: Sequence[str]) -> int:
+    args = build_app_parser().parse_args(argv)
+    serve_operator_console(
+        host=args.host,
+        port=args.port,
+        token_env=args.github_token_env or None,
+        api_base=args.github_api_base,
+    )
+    return 0
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    raw = list(sys.argv[1:] if argv is None else argv)
+    if raw and raw[0] == "app":
+        return _run_app(raw[1:])
+    return _run_agent(raw)
 
 
 if __name__ == "__main__":
