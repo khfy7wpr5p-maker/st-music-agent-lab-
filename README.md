@@ -5,7 +5,7 @@ agents across ST projects.
 
 ## Current stage
 
-A1-A16 guarded agent + evidence + verified learning/evaluation foundation:
+A1-A18 guarded agent + evidence + verified learning/evaluation/data foundation:
 
 - **A1-A3:** core contracts, model routing and deterministic autonomy policy.
 - **A4-A6:** provider/OpenHands boundaries, guarded workspace and disposable sandbox execution.
@@ -20,6 +20,10 @@ A1-A16 guarded agent + evidence + verified learning/evaluation foundation:
 - **A15:** host-write-only verified experience store and advisory `prefer/observe/review` learning.
 - **A16:** paired baseline-vs-candidate benchmark gate before any future playbook/model promotion
   review.
+- **A17:** exact execution-outcome evidence binding plan candidate, repository, branch, commit SHA,
+  CI and validators in a hash-chained host-only record.
+- **A18:** explicit curated dataset export from selected verified execution records, with training
+  and promotion authority kept false.
 
 ## Model strategy
 
@@ -61,31 +65,39 @@ recommendation has `auto_apply=false`.
 
 ## A16 learning evaluation
 
-A15 experience advice is not enough to change a playbook, prompt, policy or model. A16 adds
-`LearningEvaluationGate`, which compares the current baseline and a candidate on the exact same
-paired benchmark cases.
-
-Default gate:
-
-- at least 8 paired cases;
-- at least 2 critical cases;
-- identical case ids and severities;
-- no candidate regression on any case;
-- no critical failure;
-- at least one strict improvement.
-
-Outcomes are ordered conservatively as `failure < abstained < success`. A tie is not an
-improvement. A candidate can only become `eligible_for_host_review`; `auto_promote` is always
-false.
+`LearningEvaluationGate` compares the current baseline and a candidate on the same paired benchmark
+cases. Defaults require at least 8 cases, at least 2 critical cases, no regression, no critical
+failure and at least one strict improvement. A candidate can only become
+`eligible_for_host_review`; `auto_promote=false`.
 
 The only model-facing A16 tool is read-only:
 
 - `learning.evaluation.policy`
 
-There is no model-callable benchmark-result submission, promotion, prompt/policy mutation or model
-weight update.
+## A17 exact execution outcome
 
-See [`docs/learning-evaluation.md`](docs/learning-evaluation.md).
+A successful execution can no longer be represented by a free-form claim. `ExecutionOutcomeStore`
+requires the exact verified plan and binds the record to the chosen candidate's rank, project,
+action and evidence hash plus the expected repository, branch and full commit SHA.
+
+`SUCCESS` requires every supplied CI and validator check to pass. Failure/abstention must retain
+non-green evidence. Records are host-only, append-only and hash chained.
+
+## A18 curated dataset boundary
+
+`CuratedDatasetBuilder` exports only explicitly selected verified execution record IDs. The export
+contains structured operational facts but excludes free-form notes and hidden reasoning.
+
+Every manifest states:
+
+- `training_authorized=false`;
+- `auto_train=false`;
+- `auto_promote=false`.
+
+A `fine_tuning_candidate` export is therefore only a reviewable data artifact, not permission to
+train or promote a model.
+
+See [`docs/execution-and-dataset.md`](docs/execution-and-dataset.md).
 
 ## Safety boundary
 
@@ -98,11 +110,13 @@ The model never decides its own privilege level.
 - OpenHands discovers only the concrete ST registry manifest plus safe finish/think built-ins;
 - music snapshots fail closed on missing/truncated/drifted authority evidence;
 - portfolio plans never authorize execution and are independently recomputed;
+- execution success requires exact plan/commit/CI/validator evidence;
 - only exact verified outcomes can enter experience history;
 - experience recommendations never auto-apply;
 - candidate improvement must survive paired benchmark evaluation before host review;
 - benchmark eligibility still never auto-promotes a candidate;
-- persistent run/experience evidence is sanitized and hash chained.
+- curated dataset export never authorizes training or model promotion;
+- persistent run/experience/execution evidence is sanitized and hash chained.
 
 ## Development
 
@@ -114,5 +128,6 @@ pytest
 
 See [`docs/architecture.md`](docs/architecture.md) for the architecture map,
 [`docs/music-domain-evidence.md`](docs/music-domain-evidence.md) for music evidence,
-[`docs/planning-and-learning.md`](docs/planning-and-learning.md) for A14-A15 and
-[`docs/learning-evaluation.md`](docs/learning-evaluation.md) for A16.
+[`docs/planning-and-learning.md`](docs/planning-and-learning.md) for A14-A15,
+[`docs/learning-evaluation.md`](docs/learning-evaluation.md) for A16 and
+[`docs/execution-and-dataset.md`](docs/execution-and-dataset.md) for A17-A18.
