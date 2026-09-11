@@ -5,13 +5,13 @@ import json
 import sys
 from collections.abc import Sequence
 
+from .app3_web_app import serve_operator_console
 from .catalog import DEFAULT_MODELS
 from .contracts import AgentTask, ModelProfile, TaskKind
 from .execution import DirectAgentRunner
 from .providers import OpenAICompatibleClient, OpenAICompatibleConfig
 from .router import ModelRouter
 from .task_execution import TaskExecutionConfig
-from .web_app import serve_operator_console
 
 
 def _profile(name: str) -> ModelProfile:
@@ -39,6 +39,7 @@ def build_app_parser() -> argparse.ArgumentParser:
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--github-token-env", default="GITHUB_TOKEN")
     parser.add_argument("--github-api-base", default="https://api.github.com")
+    parser.add_argument("--task-state-file")
     parser.add_argument("--enable-writes", action="store_true")
     parser.add_argument("--profile", default="GLM-5.1")
     parser.add_argument("--provider-base-url")
@@ -86,6 +87,7 @@ def _run_app(argv: Sequence[str]) -> int:
         token_env=args.github_token_env or None,
         api_base=args.github_api_base,
         task_config=task_config,
+        state_path=args.task_state_file,
     )
     return 0
 
