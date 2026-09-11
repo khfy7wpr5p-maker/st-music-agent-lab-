@@ -60,10 +60,10 @@ class OperatorConsoleApplication:
 
 def make_handler(application: OperatorConsoleApplication) -> type[BaseHTTPRequestHandler]:
     class Handler(BaseHTTPRequestHandler):
-        def do_GET(self) -> None:  # noqa: N802 - stdlib handler API.
+        def do_GET(self) -> None:
             self._send(application.dispatch("GET", self.path))
 
-        def do_POST(self) -> None:  # noqa: N802 - explicit fail-closed mutation boundary.
+        def do_POST(self) -> None:
             self._send(application.dispatch("POST", self.path))
 
         def _send(self, response: AppResponse) -> None:
