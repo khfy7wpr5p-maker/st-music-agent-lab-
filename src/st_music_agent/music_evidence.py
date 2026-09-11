@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
-MUSIC_EVIDENCE_SCHEMA_VERSION = "1.0.0"
+MUSIC_EVIDENCE_SCHEMA_VERSION = "1.1.0"
 
 
 class MusicEvidenceError(RuntimeError):
@@ -15,11 +15,15 @@ class MusicEvidenceError(RuntimeError):
 class MusicProject(str, Enum):
     SCORE_RESTORE = "score_restore"
     MUSICXML_GUITAR_TAB = "musicxml_guitar_tab"
+    SCORE_EDITOR = "score_editor"
+    REAL_TIME_SCORE_FOLLOWING = "real_time_score_following"
 
 
 class EvidenceAuthority(str, Enum):
     REPOSITORY_CURRENT_TRUTH = "repository_current_truth"
     EXECUTABLE_CONTRACT = "executable_contract"
+    REPOSITORY_SOURCE_OF_TRUTH = "repository_source_of_truth"
+    PERMANENT_RESEARCH_EVIDENCE = "permanent_research_evidence"
 
 
 @dataclass(frozen=True, slots=True)
