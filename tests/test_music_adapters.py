@@ -69,23 +69,21 @@ def _score_truth() -> str:
 
 
 def _tab_contract() -> str:
-    return "\n".join(
-        [
-            "const REVIEW_REQUIRED_CAPABILITY_CONTRACT_VERSION = '1.0.0';",
-            "const MUSICXML_UPLOAD_RESULT_SCHEMA_VERSION = '1.1.0';",
-            "if (!renderScore || result.status === 'BLOCKED') return PLAYBACK_CAPABILITY.DISABLED;",
-            "if (result.status === 'PASS') return PLAYBACK_CAPABILITY.FULL;",
-            "return issues.some((issue) => issue.affects.includes('playback'))",
-            "  ? PLAYBACK_CAPABILITY.APPROXIMATE",
-            "  : PLAYBACK_CAPABILITY.FULL;",
-            "generateTab: tabArtifactAvailable,",
-            "editPitch: passed && tabArtifactAvailable,",
-            "playback,",
-            "export: passed && tabArtifactAvailable,",
-            "provisionalTabAvailable: reviewable && tabArtifactAvailable,",
-            "canonicalTabAvailable: passed && tabArtifactAvailable,",
-        ]
-    )
+    return """
+const REVIEW_REQUIRED_CAPABILITY_CONTRACT_VERSION = '1.0.0';
+const MUSICXML_UPLOAD_RESULT_SCHEMA_VERSION = '1.1.0';
+if (!renderScore || result.status === 'BLOCKED') return PLAYBACK_CAPABILITY.DISABLED;
+if (result.status === 'PASS') return PLAYBACK_CAPABILITY.FULL;
+return issues.some((issue) => issue.affects.includes('playback'))
+  ? PLAYBACK_CAPABILITY.APPROXIMATE
+  : PLAYBACK_CAPABILITY.FULL;
+generateTab: tabArtifactAvailable,
+editPitch: passed && tabArtifactAvailable,
+playback,
+export: passed && tabArtifactAvailable,
+provisionalTabAvailable: reviewable && tabArtifactAvailable,
+canonicalTabAvailable: passed && tabArtifactAvailable,
+"""
 
 
 def _tab_test() -> str:
