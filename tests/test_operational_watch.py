@@ -37,14 +37,14 @@ def _hash(value: object) -> str:
     ).hexdigest()
 
 
-def _baseline() -> BaselineRecord:
+def _baseline(*, model_char: str = "1", checkpoint_char: str = "a") -> BaselineRecord:
     base = {
         "schema_version": BASELINE_REGISTRY_SCHEMA_VERSION,
         "generation": 2,
         "environment": "production",
         "record_kind": "canonicalization",
-        "model_id": "model:" + "1" * 64,
-        "checkpoint_sha256": "a" * 64,
+        "model_id": "model:" + model_char * 64,
+        "checkpoint_sha256": checkpoint_char * 64,
         "previous_model_id": "model:" + "2" * 64,
         "previous_checkpoint_sha256": "b" * 64,
         "rollback_model_id": "model:" + "2" * 64,
@@ -155,11 +155,6 @@ def test_operational_watch_rejects_baseline_replacement(tmp_path) -> None:
     baseline, windows, report, _request = _eligible_evidence()
     store = OperationalWatchStateStore(tmp_path / "replace.jsonl", "watch-replace")
     store.bind_baseline(baseline)
-    changed = BaselineRecord(
-        **{
-            **baseline.__dict__,
-            "model_id": "model:" + "9" * 64,
-        }
-    )
-    with pytest.raises((OperationalWatchStateError, Exception)):
+    changed = _baseline(model_char="9", checkpoint_char="e")
+    with pytest.raises(OperationalWatchStateError, match="baseline record changed"):
         store.record_drift_review(changed, windows, report)
