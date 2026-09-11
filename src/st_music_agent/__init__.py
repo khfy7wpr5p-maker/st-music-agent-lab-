@@ -1,5 +1,12 @@
 """ST Music Agent core package."""
 
+from .activation_receipt import (
+    ACTIVATION_RECEIPT_SCHEMA_VERSION,
+    ActivationReceipt,
+    ActivationReceiptBuilder,
+    ActivationReceiptError,
+    ActivationReceiptOutcome,
+)
 from .activation_request import (
     ACTIVATION_REQUEST_SCHEMA_VERSION,
     ActivationRequest,
@@ -92,6 +99,17 @@ from .portfolio_planning import (
     PortfolioPlanningService,
 )
 from .router import ModelRouter
+from .shadow_health import (
+    SHADOW_HEALTH_POLICY_VERSION,
+    SHADOW_HEALTH_SCHEMA_VERSION,
+    RuntimeCheck,
+    RuntimeCheckKind,
+    RuntimeCheckStatus,
+    ShadowHealthDecision,
+    ShadowHealthError,
+    ShadowHealthGate,
+    ShadowHealthReport,
+)
 from .training_run import (
     TRAINING_RUN_SCHEMA_VERSION,
     TrainingRunCompletion,
@@ -102,6 +120,7 @@ from .training_run import (
 )
 
 __all__ = [
+    "ACTIVATION_RECEIPT_SCHEMA_VERSION",
     "ACTIVATION_REQUEST_SCHEMA_VERSION",
     "DATASET_EXPORT_SCHEMA_VERSION",
     "DEFAULT_MODELS",
@@ -115,8 +134,14 @@ __all__ = [
     "PORTFOLIO_PLAN_SCHEMA_VERSION",
     "PORTFOLIO_POLICY_VERSION",
     "PROMOTION_REVIEW_SCHEMA_VERSION",
+    "SHADOW_HEALTH_POLICY_VERSION",
+    "SHADOW_HEALTH_SCHEMA_VERSION",
     "TRAINING_RUN_SCHEMA_VERSION",
     "ActionRequest",
+    "ActivationReceipt",
+    "ActivationReceiptBuilder",
+    "ActivationReceiptError",
+    "ActivationReceiptOutcome",
     "ActivationRequest",
     "ActivationRequestBuilder",
     "ActivationRequestError",
@@ -176,8 +201,15 @@ __all__ = [
     "PromotionReviewDecision",
     "PromotionReviewRecord",
     "RiskLevel",
+    "RuntimeCheck",
+    "RuntimeCheckKind",
+    "RuntimeCheckStatus",
     "ScoreEditorEvidenceAdapter",
     "ScoreFollowingEvidenceAdapter",
+    "ShadowHealthDecision",
+    "ShadowHealthError",
+    "ShadowHealthGate",
+    "ShadowHealthReport",
     "TaskKind",
     "TrainingRunCompletion",
     "TrainingRunContractBuilder",

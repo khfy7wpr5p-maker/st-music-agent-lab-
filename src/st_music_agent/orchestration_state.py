@@ -28,6 +28,8 @@ class OrchestrationStage(IntEnum):
     MODEL_REGISTERED = 50
     PROMOTION_REVIEWED = 60
     ACTIVATION_REQUESTED = 70
+    ACTIVATION_RECORDED = 80
+    SHADOW_HEALTH_REVIEWED = 90
 
 
 _NEXT_STAGE = {
@@ -38,6 +40,8 @@ _NEXT_STAGE = {
     OrchestrationStage.TRAINING_COMPLETED: OrchestrationStage.MODEL_REGISTERED,
     OrchestrationStage.MODEL_REGISTERED: OrchestrationStage.PROMOTION_REVIEWED,
     OrchestrationStage.PROMOTION_REVIEWED: OrchestrationStage.ACTIVATION_REQUESTED,
+    OrchestrationStage.ACTIVATION_REQUESTED: OrchestrationStage.ACTIVATION_RECORDED,
+    OrchestrationStage.ACTIVATION_RECORDED: OrchestrationStage.SHADOW_HEALTH_REVIEWED,
 }
 
 
@@ -68,6 +72,8 @@ class OrchestrationState:
     model_candidate_id: str | None = None
     promotion_review_fingerprint: str | None = None
     activation_request_fingerprint: str | None = None
+    activation_receipt_fingerprint: str | None = None
+    shadow_health_report_fingerprint: str | None = None
     state_fingerprint: str = ""
 
     def as_dict(self) -> dict[str, Any]:
@@ -87,6 +93,8 @@ class OrchestrationState:
             "model_candidate_id": self.model_candidate_id,
             "promotion_review_fingerprint": self.promotion_review_fingerprint,
             "activation_request_fingerprint": self.activation_request_fingerprint,
+            "activation_receipt_fingerprint": self.activation_receipt_fingerprint,
+            "shadow_health_report_fingerprint": self.shadow_health_report_fingerprint,
             "state_fingerprint": self.state_fingerprint,
         }
 
@@ -203,6 +211,22 @@ class OrchestrationStateStore:
             activation_request_fingerprint=request_fingerprint,
         )
 
+    def record_activation_receipt(self, *, receipt_fingerprint: str) -> OrchestrationState:
+        self._require_next(OrchestrationStage.ACTIVATION_RECORDED)
+        self._require_sha(receipt_fingerprint, "activation_receipt_fingerprint")
+        return self._advance(
+            OrchestrationStage.ACTIVATION_RECORDED,
+            activation_receipt_fingerprint=receipt_fingerprint,
+        )
+
+    def record_shadow_health(self, *, report_fingerprint: str) -> OrchestrationState:
+        self._require_next(OrchestrationStage.SHADOW_HEALTH_REVIEWED)
+        self._require_sha(report_fingerprint, "shadow_health_report_fingerprint")
+        return self._advance(
+            OrchestrationStage.SHADOW_HEALTH_REVIEWED,
+            shadow_health_report_fingerprint=report_fingerprint,
+        )
+
     def latest(self) -> OrchestrationState | None:
         return self._latest
 
@@ -251,6 +275,8 @@ class OrchestrationStateStore:
                     "model_candidate_id",
                     "promotion_review_fingerprint",
                     "activation_request_fingerprint",
+                    "activation_receipt_fingerprint",
+                    "shadow_health_report_fingerprint",
                 ):
                     previous = getattr(latest, field)
                     current = getattr(state, field)
@@ -292,6 +318,12 @@ class OrchestrationStateStore:
                 activation_request_fingerprint=self._optional_text(
                     payload.get("activation_request_fingerprint")
                 ),
+                activation_receipt_fingerprint=self._optional_text(
+                    payload.get("activation_receipt_fingerprint")
+                ),
+                shadow_health_report_fingerprint=self._optional_text(
+                    payload.get("shadow_health_report_fingerprint")
+                ),
                 state_fingerprint=str(payload["state_fingerprint"]),
             )
         except (KeyError, ValueError) as exc:
@@ -318,6 +350,8 @@ class OrchestrationStateStore:
             ("training_completion_fingerprint", state.training_completion_fingerprint),
             ("promotion_review_fingerprint", state.promotion_review_fingerprint),
             ("activation_request_fingerprint", state.activation_request_fingerprint),
+            ("activation_receipt_fingerprint", state.activation_receipt_fingerprint),
+            ("shadow_health_report_fingerprint", state.shadow_health_report_fingerprint),
         ):
             if value is not None:
                 self._require_sha(value, label)
@@ -338,6 +372,8 @@ class OrchestrationStateStore:
             OrchestrationStage.MODEL_REGISTERED: ("model_candidate_id",),
             OrchestrationStage.PROMOTION_REVIEWED: ("promotion_review_fingerprint",),
             OrchestrationStage.ACTIVATION_REQUESTED: ("activation_request_fingerprint",),
+            OrchestrationStage.ACTIVATION_RECORDED: ("activation_receipt_fingerprint",),
+            OrchestrationStage.SHADOW_HEALTH_REVIEWED: ("shadow_health_report_fingerprint",),
         }
         for checkpoint_stage, fields in required_by_stage.items():
             if state.stage >= checkpoint_stage:
