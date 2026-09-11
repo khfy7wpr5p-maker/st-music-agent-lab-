@@ -7,7 +7,11 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
-from .activation_receipt import ActivationReceipt, ActivationReceiptBuilder, ActivationReceiptOutcome
+from .activation_receipt import (
+    ActivationReceipt,
+    ActivationReceiptBuilder,
+    ActivationReceiptOutcome,
+)
 from .shadow_health import (
     RuntimeCheck,
     ShadowHealthDecision,
