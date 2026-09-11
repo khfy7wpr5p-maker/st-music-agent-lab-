@@ -5,7 +5,7 @@ agents across ST projects.
 
 ## Current stage
 
-A1-A11 guarded agent foundation:
+A1-A12 guarded agent + music evidence foundation:
 
 - **A1 — Core contracts:** task, model capability, provider and action-risk contracts.
 - **A2 — Model routing:** capability-driven selection across current open-model profiles.
@@ -36,6 +36,10 @@ A1-A11 guarded agent foundation:
   MCP bridge. Raw OpenHands terminal/editor tools remain absent; the bridge manifest is derived
   only from `ToolRegistry`, tool names/arguments are bounded, and OpenHands applies an exact
   allowlist filter for ST tools plus safe `finish`/`think` built-ins.
+- **A12 — Music-domain evidence:** the agent can read structured, source-provenanced snapshots
+  from ST Score Restore and MusicXML-to-Guitar-TAB without mutating either project. Score Restore
+  production/Stage 12 gates and TAB REVIEW_REQUIRED/canonical-export semantics fail closed when
+  their repository truth contracts are missing or drift unexpectedly.
 
 ## Initial model strategy
 
@@ -60,6 +64,23 @@ OpenHands is connected through a narrow ST-controlled MCP boundary. `TerminalToo
 A11 contains the protocol-neutral ST bridge core and OpenHands MCP configuration wiring. The
 actual Streamable HTTP MCP network server remains a host/deployment component rather than being
 silently started inside this library.
+
+A12 adds the first domain tools on top of that same registry, so no separate privilege path is
+introduced for music projects.
+
+## First music-domain tools
+
+`build_default_music_domain_toolset()` creates read-only adapters for the current ST Score Restore
+and MusicXML-to-Guitar-TAB repositories. Register the returned toolset into any `ToolRegistry` to
+make these bounded tools available to either the direct provider loop or the A11 OpenHands bridge:
+
+- `music.score_restore.snapshot`
+- `music.tab_engine.capability_snapshot`
+
+Every snapshot includes evidence schema version, project/authority, bounded claims, warnings and
+source provenance (`repository`, `ref`, `path`, Git blob SHA).
+
+See [`docs/music-domain-evidence.md`](docs/music-domain-evidence.md) for the A12 contract.
 
 ## Safety boundary
 
@@ -91,6 +112,10 @@ The model never decides its own privilege level. Action risk is evaluated before
   allowlist; `terminal`, `file_editor` and arbitrary MCP tools are excluded;
 - non-loopback ST bridge endpoints require HTTPS; optional bridge bearer credentials are resolved
   from an environment variable only when constructing the trusted host conversation request;
+- music-domain snapshots are read-only and fail closed on truncated evidence, unsupported truth
+  schemas, missing safety booleans or executable-contract drift;
+- evaluation passes never implicitly authorize Score Restore production/Stage 12, and
+  REVIEW_REQUIRED never implicitly authorizes canonical TAB export;
 - journal payloads are sanitized before persistence and every event is linked by SHA-256 hash.
 
 Redaction is defense in depth rather than a complete data-loss-prevention system. Hosts should
@@ -121,5 +146,7 @@ st-music-agent \
   'Inspect this repository and propose the smallest safe fix.'
 ```
 
-See [`docs/architecture.md`](docs/architecture.md) for the architecture map and
-[`docs/model-selection.md`](docs/model-selection.md) for the research record.
+See [`docs/architecture.md`](docs/architecture.md) for the architecture map,
+[`docs/model-selection.md`](docs/model-selection.md) for the model/framework research record and
+[`docs/music-domain-evidence.md`](docs/music-domain-evidence.md) for the first ST music-domain
+integration contract.
