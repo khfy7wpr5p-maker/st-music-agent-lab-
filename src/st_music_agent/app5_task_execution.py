@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Mapping
 from typing import Any
 from urllib.parse import urlencode
@@ -17,7 +18,6 @@ APP5_EVIDENCE_SCHEMA_VERSION = "1.0.0"
 _MAX_REVIEWS = 50
 _MAX_REVIEW_COMMENTS = 100
 _MAX_ISSUE_COMMENTS = 50
-_MAX_COMMENT_CHARS = 800
 
 _PROJECT_VALIDATOR_NAMES = {
     "score_restore": "score_restore_current_truth",
@@ -141,6 +141,14 @@ class App5TaskService(App4TaskService):
                 evidence_reference=f"music-evidence:{project}@{head_sha}",
                 commit_sha=head_sha,
                 message=f"project contract invalid: {_bounded(exc)}",
+            )
+        except RuntimeError as exc:
+            return ValidatorResult(
+                name=name,
+                status=ValidatorStatus.UNAVAILABLE,
+                evidence_reference=f"music-evidence:{project}@{head_sha}",
+                commit_sha=head_sha,
+                message=f"project evidence unavailable: {_bounded(exc)}",
             )
 
     def refresh_pr_collaboration(self, task_id: str) -> dict[str, Any]:
@@ -297,7 +305,7 @@ def _review_projection(item: Mapping[str, Any]) -> dict[str, Any]:
         "state": item.get("state"),
         "commit_id": item.get("commit_id"),
         "submitted_at": item.get("submitted_at"),
-        "body": _text(item.get("body")),
+        **_body_evidence(item.get("body")),
     }
 
 
@@ -339,7 +347,7 @@ def _review_comment_projection(item: Mapping[str, Any]) -> dict[str, Any]:
         "reviewer": user.get("login") if isinstance(user, Mapping) else None,
         "created_at": item.get("created_at"),
         "updated_at": item.get("updated_at"),
-        "body": _text(item.get("body")),
+        **_body_evidence(item.get("body")),
     }
 
 
@@ -350,12 +358,18 @@ def _issue_comment_projection(item: Mapping[str, Any]) -> dict[str, Any]:
         "author": user.get("login") if isinstance(user, Mapping) else None,
         "created_at": item.get("created_at"),
         "updated_at": item.get("updated_at"),
-        "body": _text(item.get("body")),
+        **_body_evidence(item.get("body")),
     }
 
 
-def _text(value: Any) -> str:
-    return " ".join(value.split())[:_MAX_COMMENT_CHARS] if isinstance(value, str) else ""
+def _body_evidence(value: Any) -> dict[str, Any]:
+    if not isinstance(value, str):
+        return {"body_sha256": None, "body_chars": 0}
+    encoded = value.encode("utf-8")
+    return {
+        "body_sha256": hashlib.sha256(encoded).hexdigest(),
+        "body_chars": len(value),
+    }
 
 
 def _bounded(exc: Exception) -> str:
