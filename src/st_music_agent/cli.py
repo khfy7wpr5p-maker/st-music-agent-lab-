@@ -5,7 +5,7 @@ import json
 import sys
 from collections.abc import Sequence
 
-from .app4_web_app import serve_operator_console
+from .app5_web_app import serve_operator_console
 from .catalog import DEFAULT_MODELS
 from .contracts import AgentTask, ModelProfile, TaskKind
 from .execution import DirectAgentRunner
