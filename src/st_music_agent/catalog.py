@@ -66,4 +66,20 @@ DEFAULT_MODELS: tuple[contracts.ModelProfile, ...] = (
         supports_vision=True,
         preference=100,
     ),
+    contracts.ModelProfile(
+        name="OpenRouter-Free-Test",
+        provider="openrouter",
+        task_kinds=frozenset(
+            {
+                contracts.TaskKind.CODE,
+                contracts.TaskKind.GENERAL,
+                contracts.TaskKind.PLANNING,
+                contracts.TaskKind.RESEARCH,
+            }
+        ),
+        context_window_tokens=200_000,
+        supports_tools=True,
+        supports_vision=False,
+        preference=1,
+    ),
 )
