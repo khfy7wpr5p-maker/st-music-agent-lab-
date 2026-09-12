@@ -1,6 +1,6 @@
 # ST Music Agent Lab — Architecture Map
 
-Status: A1-A26 guarded core + APP1-APP3 runnable guarded application
+Status: A1-A26 guarded core + APP1-APP4 runnable guarded application
 Date: 2026-09-12
 
 ## Purpose
@@ -8,7 +8,7 @@ Date: 2026-09-12
 ST Music Agent Lab is the model-agnostic engineering and music-intelligence control layer for ST
 projects. The A1-A26 core owns policy, tools, budgets, approvals, evidence, verification, learning,
 training/model lifecycle, canonical-baseline history, drift and rollback-recovery boundaries.
-APP1-APP3 provide the real operator application above those boundaries.
+APP1-APP4 provide the runnable operator application above those boundaries.
 
 ## Core map
 
@@ -20,8 +20,11 @@ ST music repositories
   -> guarded reversible execution
   -> persistent exact task evidence
   -> exact-SHA CI + typed validators
-  -> explicit VERIFIED_SUCCESS decision
-  -> human-gated PR review flow
+  -> VERIFIED_SUCCESS
+  -> bounded exact diff review
+  -> human review acknowledgement bound to review_digest + HEAD
+  -> human-gated PR creation
+  -> exact PR head/base review evidence
   -> curated data / training contract
   -> immutable model candidate
   -> paired benchmark + promotion review
@@ -58,44 +61,33 @@ architecture. Write mode is opt-in and loopback-only. The model can use bounded 
 one `task.write_file` mutation whose branch is injected by the host. It cannot select `main`, create a
 PR, merge, deploy, train, canonicalize or execute rollback.
 
-## APP3 — Persistent execution evidence + CI/validator + PR review
+## APP3 — Persistent execution evidence + CI/validator
 
 APP3 keeps the APP2 write boundary and adds a durable evidence plane.
 
 ```text
 browser instruction
-  -> POST /api/tasks/preview
-  -> exact repository + protected base SHA
-  -> deterministic st-agent/<project>/<task> branch
-  -> AutonomyPolicy recomputation
-       create branch = AUTO_EXECUTE
-       write file   = AUTO_EXECUTE
-       open PR      = REQUIRE_HUMAN
-  -> append PREVIEWED event to local hash-chained journal
+  -> exact repository + base SHA
+  -> deterministic st-agent/<project>/<task> feature branch
+  -> append PREVIEWED to local hash-chained journal
   -> explicit Run click
-  -> host creates exact feature branch
-  -> ToolLoopRunner with bounded read tools + task.write_file
-  -> resolve final feature-branch HEAD
+  -> bounded ToolLoopRunner + task.write_file
+  -> resolve exact final feature-branch HEAD
   -> exact base...HEAD compare
-  -> bind changed paths + bounded diff statistics
   -> CI_PENDING
-  -> explicit browser/host evidence refresh
-  -> select workflow runs only for exact task HEAD
-  -> run typed validators: PASS / FAIL / UNAVAILABLE
+  -> explicit host/browser CI refresh
+  -> exact-SHA workflow selection
+  -> typed validators: PASS / FAIL / UNAVAILABLE
   -> VERIFIED_SUCCESS only when required evidence passes
-  -> explicit human Open PR click
-  -> recheck PR head/base binding
-  -> PR_OPENED
-  -> no merge endpoint
 ```
 
-### Persistent journal
+### APP3 persistent journal
 
-The APP3 task store is append-only JSONL with a SHA-256 hash chain. Each record contains structured
-public task metadata or bounded evidence; it never stores provider chain-of-thought, API key values or
-raw credentials.
+The task store is append-only JSONL with a SHA-256 hash chain. It stores structured public task
+metadata and bounded execution evidence, never provider chain-of-thought, API key values or raw
+credentials.
 
-The primary stage machine is:
+Primary stage machine:
 
 ```text
 PREVIEWED
@@ -110,70 +102,107 @@ PREVIEWED
   -> PR_OPENED
 ```
 
-`FAILED` is terminal for an attempt. Invalid stage skipping is rejected. Evidence snapshots are
-appended instead of replacing earlier evidence. After restart, task status and exact commit evidence
-can be reconstructed from the journal. A still-executable task must be re-previewed with the same
-instruction so the deterministic instruction fingerprint/task identity is rebound to the new process.
+`FAILED` is terminal for a task identity. Stage skipping is rejected. Earlier evidence is retained.
 
 ### Exact execution evidence
 
-A model message such as "done" is never task success. After the agent loop returns, APP3 resolves the
-feature branch again and requires a new full commit SHA different from the preview base. It then asks
-GitHub for a bounded compare of the exact base and exact head and records changed file paths and
-statistics. Missing/truncated/unbounded evidence fails closed.
+A model message such as "done" is never success. APP3 requires a final full commit SHA different from
+the preview base, then binds bounded changed-file evidence to the exact base/head pair.
 
 ### CI tracking
 
-Core logic has no uncontrolled polling loop. CI is refreshed only because the browser or host asks for
-it. Workflow evidence is filtered to the exact task HEAD SHA. Runs for another SHA cannot satisfy the
-task. Pending runs remain pending; a completed non-success conclusion fails the task.
-
-Project execution profiles are configuration data. With no explicit workflow names configured, APP3
-reviews all exact-SHA workflow runs returned for that task. A profile may name required workflows only
-when those checks really exist.
+Core logic has no uncontrolled polling loop. CI is refreshed only by an explicit host/browser request.
+Runs from another SHA cannot satisfy the task. Incomplete runs remain pending; completed non-success
+runs fail the task.
 
 ### Validator contract
 
-A validator result contains:
+Validator results contain name, `PASS` / `FAIL` / `UNAVAILABLE`, evidence reference, exact commit SHA
+and bounded public message. `UNAVAILABLE` cannot silently become `PASS`.
 
-- validator name;
-- `PASS`, `FAIL` or `UNAVAILABLE`;
-- evidence reference;
-- exact commit SHA;
-- bounded public message.
+## APP4 — Exact review + immutable revisions + PR evidence
 
-`UNAVAILABLE` cannot silently become `PASS`. APP3 includes generic exact-commit-binding and
-bounded-diff-evidence validators. Project-specific validators remain adapter-driven and must not be
-invented from generic CI success.
+APP4 adds a human review plane without widening merge or production authority.
 
-### Public outcome
+```text
+VERIFIED_SUCCESS
+  -> load bounded exact base...HEAD patch review
+  -> calculate per-file patch SHA-256 digests
+  -> calculate deterministic review_digest
+  -> reject acknowledgement if any patch is missing/truncated
+  -> explicit human acknowledgement for review_digest + exact HEAD
+  -> recheck feature branch still equals exact task HEAD
+  -> explicit human Open PR action
+  -> read back PR head/base metadata
+  -> append PR_REVIEW_SNAPSHOT
+  -> merge remains unavailable
+```
 
-The operator-facing outcome is one of:
+### Bounded exact diff review
 
-- `WORKING`;
-- `REVIEW_REQUIRED`;
-- `VERIFIED_SUCCESS`;
-- `FAILED`.
+APP4 projects at most 100 changed files, at most 16,000 displayed patch characters per file and at
+most 160,000 displayed patch characters across the review. The digest is based on commit identity and
+per-file patch digests/statistics rather than trusting the rendered UI alone.
 
-`VERIFIED_SUCCESS` means only that the bound engineering task has the required APP3 execution, CI and
-validator evidence. It is not merge, release, deployment, musical correctness, training, activation,
-canonicalization or production authorization.
+If GitHub omits a textual patch or APP4 must truncate it, the review becomes incomplete. Incomplete
+review evidence cannot be acknowledged and therefore cannot open a PR through APP4.
 
-### PR boundary
+Deterministic attention labels highlight workflow/build configuration changes, removals/renames,
+large changes and incomplete patches. These labels are review hints, not semantic correctness claims.
 
-PR creation remains an explicit human/host action. It is rejected before `VERIFIED_SUCCESS`. Before
-opening, APP3 checks that the feature branch still points at the verified HEAD. After opening, PR
-metadata is read back and its head ref/head SHA/base ref are checked before the PR evidence is
-persisted. No automatic merge endpoint is introduced.
+### Human review acknowledgement
+
+`REVIEW_ACKNOWLEDGED` is append-only and bound to both the exact task HEAD and `review_digest`.
+Moving the branch makes that acknowledgement stale. APP4 rechecks branch identity before PR creation.
+
+This acknowledgement is not merge approval, release authorization or musical correctness.
+
+### Retry / amend lineage
+
+APP4 never rewrites failed or completed parent history.
+
+- `retry` is allowed only for a `FAILED` parent task;
+- `amend` requires exact parent commit evidence;
+- a new deterministic child task is previewed through the existing APP3 path;
+- parent and child receive append-only lineage events;
+- parent stage/outcome/evidence remains unchanged;
+- the child later receives its own branch, CI, validator, review and PR evidence.
+
+This makes failed and superseded attempts auditable instead of silently converting them into success.
+
+### Exact PR review evidence
+
+After PR creation APP4 persists a `PR_REVIEW_SNAPSHOT` that binds:
+
+- exact task HEAD;
+- acknowledged review digest;
+- PR number;
+- PR head/base SHA metadata;
+- draft/mergeable metadata when available;
+- an exact-head-match flag.
+
+The operator may explicitly refresh this metadata. A PR whose head/base no longer matches the verified
+task evidence fails closed.
+
+### APP4 journal evidence events
+
+APP4 adds evidence events without changing the APP3 stage machine:
+
+```text
+REVIEW_SNAPSHOT
+REVIEW_ACKNOWLEDGED
+LINEAGE_PARENT
+LINEAGE_CHILD_CREATED
+PR_REVIEW_SNAPSHOT
+```
 
 ## Branch confinement retained
 
-The model does not receive `github.create_branch` or `github.open_pull_request`. Its only mutation
-tool is `task.write_file`, whose JSON schema has no branch field. The host injects the exact branch
-created from the preview. Attempts to supply `branch=main` or any other extra field fail tool
-validation.
+The model does not receive `github.create_branch`, `github.open_pull_request` or merge tools. Its only
+mutation tool is `task.write_file`, whose schema has no branch field. The host injects the exact
+feature branch.
 
-Task repository discovery remains bounded: recursive Git tree truncation fails closed, credential
+Repository discovery remains bounded: recursive tree truncation fails closed, credential-sensitive
 paths are filtered, and excessive file counts are rejected rather than silently hidden.
 
 ## HTTP boundary retained
@@ -182,7 +211,7 @@ Task POSTs require a random per-process `X-ST-Session` token and bounded JSON bo
 execution requires `--enable-writes`; write mode refuses non-loopback HTTP binding. Provider/GitHub
 credentials are configured by environment-variable name and resolved only inside trusted adapters.
 
-## Explicitly unavailable in APP3
+## Explicitly unavailable in APP4
 
 - direct `main` / `master` mutation;
 - arbitrary branch selection by the model;
@@ -204,12 +233,13 @@ credentials are configured by environment-variable name and resolved only inside
 6. Plans and lifecycle widening are independently recomputed from evidence.
 7. Training, activation, canonicalization and rollback remain separate host-authorized boundaries.
 8. Baseline history is append-only; failed generations are retained.
-9. APP3 engineering success is not production authority or domain correctness.
-10. Exact commit identity is required anywhere CI/validator evidence can widen task state.
-11. Earlier task evidence is append-only and cannot be silently replaced.
-12. Tests define the widened application behavior before merge.
+9. Engineering success/review acknowledgement is not production authority or domain correctness.
+10. Exact commit identity is required wherever CI/validator/review evidence widens task state.
+11. Earlier task and revision evidence is append-only and cannot be silently replaced.
+12. Tests define widened application behavior before merge.
 
-## Next application boundary — APP4
+## Next application boundary — APP5
 
-APP4 should improve review/diff UX, explicit retry/amend attempts and exact PR review evidence. It
-should reuse APP3 persistent task identities and must not widen merge or production authority.
+APP5 should focus on real project-specific validator adapters and richer PR review collaboration
+(review/thread evidence, project-aware validation summaries) while keeping merge and production
+authority outside the agent application.

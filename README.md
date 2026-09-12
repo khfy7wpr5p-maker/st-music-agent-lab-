@@ -10,11 +10,13 @@ The repository contains the A1-A26 guarded model lifecycle plus the runnable app
 - **APP1:** project evidence dashboard + independently verified portfolio planning;
 - **APP2:** opt-in, loopback-only guarded engineering tasks on a host-bound feature branch;
 - **APP3:** persistent resumable task evidence, exact commit/diff binding, explicit CI/validator
-  review, and a human-triggered PR flow gated by `VERIFIED_SUCCESS`.
+  review, and a human-triggered PR flow gated by `VERIFIED_SUCCESS`;
+- **APP4:** bounded exact diff review, human review acknowledgement, immutable retry/amend child
+  tasks, and PR review evidence bound to the verified task HEAD.
 
-Package version: `0.27.0`.
+Package version: `0.28.0`.
 
-## Run read / preview mode
+## Run read / preview / review mode
 
 ```bash
 python -m pip install -e '.[dev]'
@@ -23,20 +25,19 @@ st-music-agent app
 
 Open `http://127.0.0.1:8765`.
 
-This mode reads the four ST project evidence surfaces, shows warnings/next-safe-boundaries, builds a
-fresh deterministic plan, previews engineering tasks, and can inspect previously persisted APP3 task
-evidence. It cannot execute model writes unless `--enable-writes` is supplied.
+This mode reads the four ST project evidence surfaces, builds a fresh verified portfolio plan,
+previews engineering tasks, restores persisted task evidence, and can inspect exact APP4 diff review
+bundles. It cannot execute model writes unless `--enable-writes` is supplied.
 
-By default APP3 stores structured task evidence at:
+By default APP3/APP4 stores structured task evidence at:
 
 ```text
 ~/.st-music-agent/task-events.jsonl
 ```
 
-A different local path can be selected with `--task-state-file PATH` or the
-`ST_MUSIC_AGENT_TASK_STATE` environment variable. The journal stores task metadata and public
-execution evidence only; it does not store provider chain-of-thought, API keys, raw credentials, or
-secret payloads.
+Override with `--task-state-file PATH` or `ST_MUSIC_AGENT_TASK_STATE`. The journal stores bounded
+public task/review evidence only; it does not store provider chain-of-thought, API keys, raw
+credentials, or secret payloads.
 
 ## Run guarded feature-branch tasks
 
@@ -49,44 +50,42 @@ st-music-agent app \
   --github-token-env GITHUB_TOKEN
 ```
 
-Write mode is accepted only on a loopback host. Provider/GitHub configuration names reference host
-environment variables; credential values stay inside trusted adapters.
+Write mode is accepted only on a loopback host. Credential values remain inside trusted adapters.
 
-APP3 performs this bounded flow:
+The current APP4 flow is:
 
 ```text
 instruction
-  -> preview exact repo + base SHA + deterministic feature branch
-  -> persist PREVIEWED metadata in append-only hash-chained task journal
-  -> AutonomyPolicy verifies branch/write = AUTO_EXECUTE and PR = REQUIRE_HUMAN
-  -> user clicks Run
-  -> host creates exact st-agent/... feature branch
-  -> model gets bounded repository reads + task.write_file
-  -> task.write_file remains host-bound to that exact feature branch
-  -> host resolves exact final feature-branch HEAD
-  -> bounded base...HEAD compare records changed paths/stats
-  -> state becomes CI_PENDING
-  -> user/host explicitly refreshes CI + validator evidence
-  -> only exact-HEAD workflow runs are considered
-  -> typed validators report PASS / FAIL / UNAVAILABLE
-  -> VERIFIED_SUCCESS only when required CI and validators pass
-  -> user may explicitly click Open PR
-  -> PR head/base binding is rechecked
+  -> exact repo/base SHA preview + deterministic feature branch
+  -> append-only PREVIEWED evidence
+  -> explicit Run click
+  -> bounded feature-branch agent execution
+  -> exact final HEAD + bounded base...HEAD change evidence
+  -> exact-SHA CI + typed validators
+  -> VERIFIED_SUCCESS
+  -> bounded exact patch review for the same base/head
+  -> review_digest from commit identity + per-file patch digests
+  -> explicit human acknowledgement of that exact review
+  -> explicit human Open PR click
+  -> PR head/base read-back + PR_REVIEW_SNAPSHOT
   -> merge remains unavailable
 ```
 
-There is no uncontrolled background polling loop in core logic. CI/validator refresh is triggered by
-the browser or another explicit host request.
+If any patch is unavailable or truncated by APP4 review limits, review is incomplete and cannot be
+acknowledged. CI success and review acknowledgement are engineering evidence only; neither is musical
+correctness, release readiness or production authorization.
 
-## Persistent task evidence
+## Retry and amend
 
-APP3 uses an append-only JSONL journal with a SHA-256 hash chain. Stage skipping is rejected, earlier
-evidence is not silently replaced, and failed attempts are not rewritten as successful attempts.
-After an app restart the operator can inspect persisted task status and exact commit evidence. A task
-that still needs model execution can be re-previewed with the same instruction so its deterministic
-identity is rebound in the new process.
+APP4 never rewrites a failed or completed parent task. A retry/amend creates a separate child task:
 
-The task lifecycle is:
+- `retry` is for a `FAILED` parent;
+- `amend` requires exact parent commit evidence;
+- parent stage/outcome/evidence remains immutable;
+- child receives a new task id and a new bounded feature branch through the existing APP3 path;
+- parent/child lineage is appended to the same hash-chained journal.
+
+## Persistent task lifecycle
 
 ```text
 PREVIEWED
@@ -101,40 +100,33 @@ PREVIEWED
   -> PR_OPENED
 ```
 
-A failed attempt can transition to `FAILED`; it is not rewritten in place. Public outcomes are
+A task can transition to terminal `FAILED`; it is not rewritten in place. Public outcomes are
 `WORKING`, `REVIEW_REQUIRED`, `VERIFIED_SUCCESS`, and `FAILED`.
 
-## CI and validator semantics
+APP4 adds evidence events without widening the stage machine:
 
-APP3 never treats a model message such as "done" as proof of success. Success is bound to an exact
-repository, feature branch and commit SHA. CI evidence for another SHA cannot satisfy the task.
-Incomplete CI remains pending; failed CI cannot become `VERIFIED_SUCCESS`.
-
-Validators use a typed contract containing validator name, `PASS` / `FAIL` / `UNAVAILABLE`, evidence
-reference, exact commit SHA, and a bounded message. `UNAVAILABLE` never silently becomes `PASS`.
-Generic APP3 validators establish exact commit binding and bounded diff evidence. Project profiles are
-configuration data; they can name additional real host validators or required workflow names when
-those checks actually exist.
-
-CI success is engineering evidence, not proof of musical correctness, release readiness, model
-promotion, deployment safety, or production authorization.
+```text
+REVIEW_SNAPSHOT
+REVIEW_ACKNOWLEDGED
+LINEAGE_PARENT / LINEAGE_CHILD_CREATED
+PR_REVIEW_SNAPSHOT
+```
 
 ## Core safety model
 
 Read-only work may run autonomously. Reversible feature-branch writes may run when deterministic
-policy says `AUTO_EXECUTE`. Protected-branch, destructive and external side effects remain host or
-human gated.
+policy says `AUTO_EXECUTE`. Protected/destructive/external actions remain host or human gated.
 
 The application has no endpoint or model tool for:
 
-- merge or direct `main` / `master` writes;
+- merge or auto-merge;
+- direct `main` / `master` writes;
 - file deletion;
 - deployment/release;
 - model training or production activation;
 - canonicalization or rollback execution.
 
-PR creation remains a distinct human/host action and APP3 additionally requires exact verified task
-evidence before that action is allowed.
+The model cannot choose the writable branch and cannot open a PR itself.
 
 ## Music-domain evidence
 
@@ -145,16 +137,15 @@ The operator console reads bounded snapshots from:
 - Score Editor;
 - Real-Time Score Following.
 
-One inaccessible repository is isolated to its project card. `REVIEW_REQUIRED` remains localized in
-music-domain workflows and must not become a global lock when a readable/reviewable artifact can be
-shown safely.
+`REVIEW_REQUIRED` remains localized and must not become a global lock when a safe readable/reviewable
+artifact can still be shown.
 
 ## Model lifecycle
 
 The existing A1-A26 core remains authoritative for evidence, planning, execution records, curated
 data, training lineage, model candidates, activation, canonicalization, baseline stability, drift,
-rollback review, rollback receipts and post-rollback recovery. APP1-APP3 sit above that core rather
-than replacing its policy or approval boundaries.
+rollback review, rollback receipts and post-rollback recovery. APP1-APP4 sit above that core without
+replacing its policy or approval boundaries.
 
 ## Development
 
@@ -169,6 +160,7 @@ See:
 - [`docs/architecture.md`](docs/architecture.md)
 - [`docs/operator-console.md`](docs/operator-console.md)
 - [`docs/app3-execution-evidence.md`](docs/app3-execution-evidence.md)
+- [`docs/app4-review-and-revision.md`](docs/app4-review-and-revision.md)
 - [`docs/music-domain-evidence.md`](docs/music-domain-evidence.md)
 - [`docs/planning-and-learning.md`](docs/planning-and-learning.md)
 - [`docs/learning-evaluation.md`](docs/learning-evaluation.md)
