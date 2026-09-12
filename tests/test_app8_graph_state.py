@@ -38,7 +38,7 @@ TAB_SHA = "b" * 40
 
 def node_budget() -> BudgetEnvelope:
     return BudgetEnvelope(
-        max_elapsed_seconds=60,
+        max_elapsed_seconds=60.0,
         max_model_turns=2,
         max_tool_calls=2,
         max_model_facing_bytes=100_000,
@@ -54,7 +54,7 @@ def supervision_graph() -> DependencyGraph:
         success_evidence=("evidence_report",),
         max_agent_count=1,
         total_budget=BudgetEnvelope(
-            max_elapsed_seconds=600,
+            max_elapsed_seconds=600.0,
             max_model_turns=10,
             max_tool_calls=10,
             max_model_facing_bytes=1_000_000,
