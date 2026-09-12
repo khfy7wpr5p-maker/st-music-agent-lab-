@@ -48,22 +48,25 @@ Do not open release or SesliTab gates as part of feature development.
 
 def _following_readme() -> str:
     return """
-**SF-11 Mixed Ensemble is complete for repository-owned deterministic channel-separated heterogeneous evidence. SF-12 Orchestra Global Score Following is the next autonomous stage.**
+Orchestra-global evidence is measure/beat authority only; aggregate texture matching must not be presented as per-instrument transcription.
 Experimental evidence is not production or pedagogical authority.
+**SF-12 Orchestra Global Score Following is complete for repository-owned deterministic global measure/beat structural evidence with explicit real-audio limitations. SF-13 Orchestra Section Research is the next autonomous stage.**
 SF-04 Solo Violin remains a narrow real-evidence rights gate and does not block independent stages.
 """
 
 
-def _sf11_report() -> str:
+def _sf12_report() -> str:
     return """
-Authority boundary: `mixed_ensemble_channel_separated_research_not_acoustic_mixture_authority`.
-This evidence does **not** establish acoustic mono-mixture source separation, real-room generalization, or pedagogical grading.
-Implementation head: `a694a4ff088ed7ef45192fca77032a283dc0410a`.
-CI run `34529350858` passed all 9 jobs on that head.
-Shared confidence unavailable.
-The benchmark is synthetic, repository-owned, and channel-separated.
-Asynchrony, divergence, quorum loss, and abstention are evidence states rather than quality grades.
-SF-11 is complete for deterministic channel-separated mixed-ensemble provenance and fail-soft timing semantics.
+SF-12 establishes a repository-owned deterministic baseline for **global orchestra measure/beat tracking only**.
+It does not emit or infer per-instrument transcription, section identity, source separation, conductor intent, or pedagogical judgment.
+Authority boundary:
+`global_measure_beat_research_not_per_instrument_transcription_authority`
+Implementation CI: `34678255101`
+Implementation head: `7f023613697a3ae999bb0f2ebc6fd86d5adbde72`
+Confidence unavailability remains explicit.
+Real orchestral audio validation remains dataset/license-gated.
+The evidence does not support production readiness or pedagogical authority.
+SF-12 is **complete for repository-owned deterministic global measure/beat structural evidence with a well-characterized real-audio limitation**.
 """
 
 
@@ -79,10 +82,10 @@ def _following_client() -> FakeReadClient:
         "khfy7wpr5p-maker/st-real-time-score-following-lab",
         {
             "README.md": {"content": _following_readme(), "truncated": False, "sha": "readme-sha"},
-            "benchmarks/reports/SF11_MIXED_ENSEMBLE.md": {
-                "content": _sf11_report(),
+            "benchmarks/reports/SF12_ORCHESTRA_GLOBAL.md": {
+                "content": _sf12_report(),
                 "truncated": False,
-                "sha": "sf11-sha",
+                "sha": "sf12-sha",
             },
         },
     )
@@ -123,24 +126,32 @@ def test_score_following_snapshot_preserves_research_authority_boundary() -> Non
 
     assert payload["project"] == "real_time_score_following"
     assert payload["authority"] == "permanent_research_evidence"
-    assert payload["claims"]["completed_stage"] == "SF-11"
-    assert payload["claims"]["next_stage"] == "SF-12"
+    assert payload["state"] == "SF12_COMPLETE_SF13_NEXT_RESEARCH"
+    assert payload["claims"]["completed_stage"] == "SF-12"
+    assert payload["claims"]["next_stage"] == "SF-13"
     assert payload["claims"]["research_evidence_is_production_authority"] is False
     assert payload["claims"]["research_evidence_is_pedagogical_authority"] is False
+    assert payload["claims"]["global_measure_beat_research_evidence"] is True
+    assert payload["claims"]["per_instrument_transcription_authority"] is False
+    assert payload["claims"]["real_orchestral_audio_authority"] is False
     assert payload["claims"]["acoustic_mono_mixture_authority"] is False
+    assert payload["claims"]["calibrated_global_confidence_available"] is False
     assert payload["claims"]["shared_confidence_status"] == "unavailable"
-    assert payload["claims"]["sf11_ci_jobs_passed"] == 9
+    assert payload["claims"]["sf12_ci_run"] == "34678255101"
+    assert payload["claims"]["sf12_implementation_head"] == (
+        "7f023613697a3ae999bb0f2ebc6fd86d5adbde72"
+    )
     assert len(payload["sources"]) == 2
 
 
 def test_score_following_snapshot_fails_closed_if_permanent_evidence_drifts() -> None:
     client = _following_client()
-    client.files["benchmarks/reports/SF11_MIXED_ENSEMBLE.md"]["content"] = _sf11_report().replace(
-        "Shared confidence unavailable.",
-        "Shared confidence 0.99.",
+    client.files["benchmarks/reports/SF12_ORCHESTRA_GLOBAL.md"]["content"] = _sf12_report().replace(
+        "Confidence unavailability remains explicit.",
+        "Calibrated confidence is available.",
     )
 
-    with pytest.raises(MusicEvidenceError, match="SF-11 permanent evidence marker is missing"):
+    with pytest.raises(MusicEvidenceError, match="SF-12 permanent evidence marker is missing"):
         ScoreFollowingEvidenceAdapter(client).collect()
 
 
