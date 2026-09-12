@@ -28,10 +28,10 @@ DEFAULT_MODELS: tuple[contracts.ModelProfile, ...] = (
                 contracts.TaskKind.RESEARCH,
             }
         ),
-        context_window_tokens=1_000_000,
+        context_window_tokens=200_000,
         supports_tools=True,
         supports_vision=False,
-        preference=108,
+        preference=99,
     ),
     contracts.ModelProfile(
         name="Qwen3.8",
