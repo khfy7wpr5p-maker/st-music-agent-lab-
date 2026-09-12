@@ -684,7 +684,6 @@ def _derive_coordination_states(
     state: dict[str, CoordinationItemState],
     receipts: dict[str, ProjectCompletionReceipt],
 ) -> None:
-    by_id = {item.item_id: item for item in plan.items}
     blocking = {
         CoordinationItemState.REVIEW_REQUIRED,
         CoordinationItemState.ABSTAINED,
