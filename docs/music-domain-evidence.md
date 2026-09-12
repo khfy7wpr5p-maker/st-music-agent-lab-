@@ -76,21 +76,21 @@ Repository: `khfy7wpr5p-maker/st-score-editor-core`
 
 Source: `ROADMAP.md`
 
-The roadmap explicitly defines repository reality as the current source of truth. A13 preserves
-these boundaries:
+The roadmap explicitly defines repository reality as the current source of truth. The source is now
+synchronized through APP-11I, and A13 preserves these boundaries:
 
-- APP-11F is complete/merged in the declared roadmap source;
-- the current phase is strong-editor semantic selection, relation authoring and timing-space
-  expansion;
+- APP-11I Session + Browser Triplet Retiming is complete/merged;
+- APP-11G/H admission + atomic mutation are productized through `EditorSessionV4`;
+- one successful retiming action is one unified history revision with exact Undo;
+- Triplet removal/unretiming remains unadmitted until APP-11J or later explicitly admits it;
+- APP-11J Triplet Removal / Unretiming Admission Foundation is the next analysis-first action;
 - manual real-device/browser validation remains required;
 - the standalone release gate remains closed;
-- SesliTab V4 cutover remains unauthorized;
-- feature development must not silently open release/cutover gates;
-- APP-11G Tuplet Retiming Admission Foundation remains the roadmap-declared next action.
+- SesliTab cutover remains unauthorized and outside the current core-development track;
+- renderer coordinates remain non-authoritative.
 
-Planned capability is never reported as production capability. If implementation commits advance
-faster than `ROADMAP.md`, the adapter continues to report the roadmap truth rather than silently
-inferring a newer release/product state from unrelated files.
+Planned capability is never reported as production capability. APP-11I completion does not imply
+standalone release, SesliTab cutover or permission to remove/unretime existing Triplets.
 
 ## A13 — Real-Time Score Following
 
@@ -149,8 +149,10 @@ repository-owned evidence wording/path changes, a validator may become `UNAVAILA
 adapter contract is updated and tested against the new evidence. That is preferable to presenting a
 stale or inferred project state as current truth.
 
-The APP8 operational pilot uses this failure mode as a diagnostic signal: evidence-contract drift is
-an operator-maintenance issue, not permission to bypass the validator.
+The APP8 operational pilot demonstrated this twice in sequence: Score Following advanced from SF-11
+to SF-12, and Score Editor later synchronized its roadmap from APP-11F/APP-11G-next to
+APP-11I/APP-11J-next. In both cases the correct response is to refresh the bounded adapter/test contract,
+not to weaken validation.
 
 ## Next safe expansion
 

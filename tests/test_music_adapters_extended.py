@@ -33,16 +33,17 @@ class FakeReadClient:
 def _editor_roadmap() -> str:
     return """
 ## Current source of truth
-Repository reality only; planned capability is not production capability.
-- **APP-11F — COMPLETE / MERGED:** bounded triplet metadata.
-- **Manual standalone release matrix — DEFERRED FOR CURRENT DEVELOPMENT / REQUIRED BEFORE RELEASE.**
-- **SesliTab V4 product cutover — DEFERRED / NOT AUTHORIZED**
-The project is now in **strong-editor semantic selection, relation authoring and timing-space expansion**
-- `manualDeviceValidationRequired: true`
-- `standaloneReleaseGatePassed: false`
-- `seslitabCutoverAuthorized: false`
-**APP-11G — Tuplet Retiming Admission Foundation.**
-Do not open release or SesliTab gates as part of feature development.
+Repository reality only. Planned capability is not production capability.
+### APP-11I — Session + Browser Triplet Retiming
+**COMPLETE / MERGED — PR #140 / merge `6b0e2cac572dfcfa570bfab2bb8eb47a9d7f68fc`.**
+APP-11H is productized through EditorSessionV4 and the standalone browser runtime.
+-> EditorSessionV4 one user action / one history revision
+**APP-11J — Triplet Removal / Unretiming Admission Foundation.**
+Triplet removal/unretiming until APP-11J or later explicitly admits it;
+manualDeviceValidationRequired = true
+standaloneReleaseGatePassed = false
+seslitabCutoverAuthorized = false
+SesliTab is outside this core-development track and is not an architectural dependency.
 """
 
 
@@ -101,23 +102,40 @@ def test_score_editor_snapshot_keeps_release_and_cutover_gates_closed() -> None:
     assert payload["schema_version"] == "1.1.0"
     assert payload["project"] == "score_editor"
     assert payload["authority"] == "repository_source_of_truth"
-    assert payload["state"] == "DEVELOPMENT_ACTIVE_RELEASE_GATED"
-    assert payload["claims"]["app_11f_complete_merged"] is True
+    assert payload["state"] == "APP11I_COMPLETE_APP11J_NEXT_RELEASE_GATED"
+    assert payload["claims"]["app_11i_complete_merged"] is True
+    assert payload["claims"]["triplet_retiming_productized"] is True
+    assert payload["claims"]["one_user_action_one_history_revision"] is True
+    assert payload["claims"]["triplet_removal_unretiming_authorized"] is False
     assert payload["claims"]["manual_device_validation_required"] is True
     assert payload["claims"]["standalone_release_gate_passed"] is False
     assert payload["claims"]["seslitab_cutover_authorized"] is False
     assert payload["claims"]["release_gate_may_open_during_feature_development"] is False
+    assert payload["claims"]["next_development_action"] == (
+        "APP-11J — Triplet Removal / Unretiming Admission Foundation."
+    )
     assert payload["sources"][0]["blob_sha"] == "editor-sha"
 
 
 def test_score_editor_snapshot_fails_closed_if_release_marker_drifts() -> None:
     client = _editor_client()
     client.files["ROADMAP.md"]["content"] = _editor_roadmap().replace(
-        "standaloneReleaseGatePassed: false",
-        "standaloneReleaseGatePassed: true",
+        "standaloneReleaseGatePassed = false",
+        "standaloneReleaseGatePassed = true",
     )
 
     with pytest.raises(MusicEvidenceError, match="roadmap marker is missing"):
+        ScoreEditorEvidenceAdapter(client).collect()
+
+
+def test_score_editor_snapshot_fails_closed_if_next_stage_drift_is_unreviewed() -> None:
+    client = _editor_client()
+    client.files["ROADMAP.md"]["content"] = _editor_roadmap().replace(
+        "APP-11J — Triplet Removal / Unretiming Admission Foundation.",
+        "APP-11K — Unreviewed future stage.",
+    )
+
+    with pytest.raises(MusicEvidenceError, match="next action is missing"):
         ScoreEditorEvidenceAdapter(client).collect()
 
 

@@ -23,8 +23,9 @@ _SCORE_FOLLOWING_REPOSITORY = "khfy7wpr5p-maker/st-real-time-score-following-lab
 _SCORE_FOLLOWING_README_PATH = "README.md"
 _SCORE_FOLLOWING_SF12_PATH = "benchmarks/reports/SF12_ORCHESTRA_GLOBAL.md"
 
-_EDITOR_PHASE = re.compile(r"The project is now in \*\*(.+?)\*\*")
-_EDITOR_NEXT = re.compile(r"\*\*(APP-11G — Tuplet Retiming Admission Foundation\.)\*\*")
+_EDITOR_NEXT = re.compile(
+    r"\*\*(APP-11J — Triplet Removal / Unretiming Admission Foundation\.)\*\*"
+)
 _FOLLOWING_HEAD = re.compile(r"Implementation head: `([0-9a-f]{40})`")
 _FOLLOWING_CI = re.compile(r"Implementation CI: `(\d+)`")
 _FOLLOWING_AUTHORITY = re.compile(
@@ -88,26 +89,29 @@ class ScoreEditorEvidenceAdapter:
         roadmap = _read_text(self.client, _SCORE_EDITOR_ROADMAP_PATH, ref)
 
         required_markers = (
-            "Repository reality only; planned capability is not production capability.",
-            "APP-11F — COMPLETE / MERGED",
-            "Manual standalone release matrix — DEFERRED FOR CURRENT DEVELOPMENT / REQUIRED BEFORE RELEASE.",
-            "SesliTab V4 product cutover — DEFERRED / NOT AUTHORIZED",
-            "manualDeviceValidationRequired: true",
-            "standaloneReleaseGatePassed: false",
-            "seslitabCutoverAuthorized: false",
-            "Do not open release or SesliTab gates as part of feature development.",
+            "Repository reality only. Planned capability is not production capability.",
+            "APP-11I — Session + Browser Triplet Retiming",
+            "COMPLETE / MERGED — PR #140 / merge `6b0e2cac572dfcfa570bfab2bb8eb47a9d7f68fc`.",
+            "one user action / one history revision",
+            "Triplet removal/unretiming until APP-11J or later explicitly admits it",
+            "manualDeviceValidationRequired = true",
+            "standaloneReleaseGatePassed = false",
+            "seslitabCutoverAuthorized = false",
+            "SesliTab is outside this core-development track and is not an architectural dependency.",
         )
         for marker in required_markers:
             _require_marker(roadmap.content, marker, "Score Editor roadmap")
 
-        phase = _extract(_EDITOR_PHASE, roadmap.content, "Score Editor product phase")
         next_action = _extract(_EDITOR_NEXT, roadmap.content, "Score Editor next action")
 
         claims = {
             "repository_reality_is_source_of_truth": True,
             "planned_capability_is_production_capability": False,
-            "app_11f_complete_merged": True,
-            "current_product_phase": phase,
+            "app_11i_complete_merged": True,
+            "triplet_retiming_productized": True,
+            "one_user_action_one_history_revision": True,
+            "triplet_removal_unretiming_authorized": False,
+            "current_product_phase": "APP-11I complete / APP-11J analysis-first next",
             "manual_device_validation_required": True,
             "standalone_release_gate_passed": False,
             "seslitab_cutover_authorized": False,
@@ -117,16 +121,18 @@ class ScoreEditorEvidenceAdapter:
         return MusicEvidenceSnapshot(
             project=MusicProject.SCORE_EDITOR,
             authority=EvidenceAuthority.REPOSITORY_SOURCE_OF_TRUTH,
-            state="DEVELOPMENT_ACTIVE_RELEASE_GATED",
+            state="APP11I_COMPLETE_APP11J_NEXT_RELEASE_GATED",
             summary=(
-                "Score Editor has a strong merged authoring baseline through APP-11F, but the "
-                "standalone release matrix is still required and SesliTab V4 cutover is not "
-                "authorized."
+                "Score Editor has merged productized straight-three Triplet retiming through "
+                "APP-11I with one user action / one history revision. Triplet removal/unretiming "
+                "remains fail-closed pending APP-11J analysis, while physical release validation "
+                "and product cutover remain closed."
             ),
             claims=claims,
             warnings=(
+                "Triplet removal/unretiming remains unadmitted until APP-11J or later",
                 "real-device/browser release matrix remains incomplete",
-                "SesliTab V4 product cutover remains unauthorized",
+                "standalone release and SesliTab cutover remain unauthorized",
             ),
             next_safe_boundary=next_action,
             sources=(roadmap.source,),
