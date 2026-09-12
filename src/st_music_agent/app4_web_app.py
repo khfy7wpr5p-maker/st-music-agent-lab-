@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from http.server import ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import unquote, urlsplit
+from urllib.parse import urlsplit
 
 from .app3_web_app import App3OperatorConsoleApplication
 from .app4_task_execution import App4TaskService
@@ -30,13 +30,8 @@ class App4OperatorConsoleApplication(App3OperatorConsoleApplication):
         try:
             if method == "GET" and parsed.path == "/":
                 return AppResponse(200, "text/html; charset=utf-8", _APP4_HTML.encode("utf-8"))
-            review_prefix = "/api/tasks/review/"
-            if method == "GET" and parsed.path.startswith(review_prefix):
-                task_id = unquote(parsed.path[len(review_prefix) :])
-                if not task_id or "/" in task_id:
-                    return self._json(404, {"error": "not_found"})
-                return self._json(200, self.task_service.review_bundle(task_id))
             if method == "POST" and parsed.path in {
+                "/api/tasks/review",
                 "/api/tasks/ack-review",
                 "/api/tasks/revision",
                 "/api/tasks/refresh-pr-review",
@@ -44,6 +39,11 @@ class App4OperatorConsoleApplication(App3OperatorConsoleApplication):
                 if self._header(headers, "x-st-session") != self.session_token:
                     return self._json(403, {"error": "invalid_session"})
                 payload = self._decode_json(body)
+                if parsed.path == "/api/tasks/review":
+                    task_id = payload.get("task_id")
+                    if not isinstance(task_id, str):
+                        raise TypeError("task_id must be text")
+                    return self._json(200, self.task_service.review_bundle(task_id))
                 if parsed.path == "/api/tasks/ack-review":
                     task_id = payload.get("task_id")
                     review_digest = payload.get("review_digest")
@@ -147,7 +147,7 @@ async function boot(){const s=await req("/api/session");token=s.session_token;wr
 async function preview(){try{const p=await post("/api/tasks/preview",{project:$("#project").value,instruction:$("#instruction").value});current=p;currentReview=null;render({task_id:p.task_id,stage:"PREVIEWED",outcome:"WORKING",preview:p})}catch(e){$("#task").textContent=e.message}}
 async function run(){if(!current)return;try{await post("/api/tasks/run",{task_id:current.task_id});render(await req(`/api/tasks/status/${encodeURIComponent(current.task_id)}`))}catch(e){$("#task").insertAdjacentHTML("beforeend",`<div class="state bad">${esc(e.message)}</div>`)}}
 async function refreshEvidence(){if(!current)return;try{render(await post("/api/tasks/refresh-evidence",{task_id:current.task_id}))}catch(e){$("#task").insertAdjacentHTML("beforeend",`<div class="state bad">${esc(e.message)}</div>`)}}
-async function loadReview(){if(!current)return;try{renderReview(await req(`/api/tasks/review/${encodeURIComponent(current.task_id)}`));render(await req(`/api/tasks/status/${encodeURIComponent(current.task_id)}`))}catch(e){$("#review").textContent=e.message}}
+async function loadReview(){if(!current)return;try{renderReview(await post("/api/tasks/review",{task_id:current.task_id}));render(await req(`/api/tasks/status/${encodeURIComponent(current.task_id)}`))}catch(e){$("#review").textContent=e.message}}
 async function ackReview(){if(!current||!currentReview)return;try{render(await post("/api/tasks/ack-review",{task_id:current.task_id,review_digest:currentReview.review_digest}))}catch(e){$("#review").insertAdjacentHTML("afterbegin",`<div class="state bad">${esc(e.message)}</div>`)}}
 async function openPr(){if(!current)return;try{await post("/api/tasks/open-pr",{task_id:current.task_id});render(await req(`/api/tasks/status/${encodeURIComponent(current.task_id)}`));await post("/api/tasks/refresh-pr-review",{task_id:current.task_id});render(await req(`/api/tasks/status/${encodeURIComponent(current.task_id)}`))}catch(e){$("#task").insertAdjacentHTML("beforeend",`<div class="state bad">${esc(e.message)}</div>`)}}
 async function revision(){if(!current)return;try{const r=await post("/api/tasks/revision",{parent_task_id:current.task_id,mode:$("#revisionMode").value,instruction:$("#revisionInstruction").value});const c=r.child;$("#revisionResult").innerHTML=`Yeni ${esc(r.mode)} child: <span class="mono">${esc(c.task_id)}</span>`;current=c;currentReview=null;render({task_id:c.task_id,stage:"PREVIEWED",outcome:"WORKING",preview:c})}catch(e){$("#revisionResult").textContent=e.message}}
