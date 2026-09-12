@@ -38,6 +38,14 @@ def test_long_context_can_fall_back_to_qwen() -> None:
     assert selected.name == "Qwen3.8"
 
 
+def test_local_qwen_test_profile_is_explicit_and_low_priority() -> None:
+    local_profile = next(profile for profile in DEFAULT_MODELS if profile.name == "Local-Qwen3-Test")
+
+    assert local_profile.provider == "local"
+    assert local_profile.supports_tools is True
+    assert local_profile.preference == 0
+
+
 def test_impossible_context_requirement_fails_closed() -> None:
     with pytest.raises(NoCompatibleModelError):
         ModelRouter(DEFAULT_MODELS).select(
