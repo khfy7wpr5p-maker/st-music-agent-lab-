@@ -18,6 +18,22 @@ DEFAULT_MODELS: tuple[contracts.ModelProfile, ...] = (
         preference=110,
     ),
     contracts.ModelProfile(
+        name="DeepSeek-V4-Pro",
+        provider="deepseek",
+        task_kinds=frozenset(
+            {
+                contracts.TaskKind.CODE,
+                contracts.TaskKind.GENERAL,
+                contracts.TaskKind.PLANNING,
+                contracts.TaskKind.RESEARCH,
+            }
+        ),
+        context_window_tokens=200_000,
+        supports_tools=True,
+        supports_vision=False,
+        preference=99,
+    ),
+    contracts.ModelProfile(
         name="Qwen3.8",
         provider="qwen",
         task_kinds=frozenset(
