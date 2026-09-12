@@ -82,4 +82,20 @@ DEFAULT_MODELS: tuple[contracts.ModelProfile, ...] = (
         supports_vision=False,
         preference=1,
     ),
+    contracts.ModelProfile(
+        name="Local-Qwen3-Test",
+        provider="local",
+        task_kinds=frozenset(
+            {
+                contracts.TaskKind.CODE,
+                contracts.TaskKind.GENERAL,
+                contracts.TaskKind.PLANNING,
+                contracts.TaskKind.RESEARCH,
+            }
+        ),
+        context_window_tokens=32_768,
+        supports_tools=True,
+        supports_vision=False,
+        preference=0,
+    ),
 )
