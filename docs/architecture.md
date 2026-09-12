@@ -1,7 +1,7 @@
 # ST Music Agent Lab — Architecture Map
 
-Status: A1-A26 guarded core + APP1-APP8E bounded runnable application
-Date: 2026-09-12
+Status: A1-A26 guarded core + APP1-APP8E bounded runnable application + deterministic local executor
+Date: 2026-09-13
 
 ## Purpose
 
@@ -58,6 +58,40 @@ ST music repositories
   -> append-only rollback generation
 ```
 
+## Deterministic local executor — MODEL_PLANS_HOST_EXECUTES
+
+The default write-enabled local application no longer asks a small local model to perform repository
+inspection, mutation and commit production through one long recursive tool loop. The small model is a
+bounded planner. The host owns repository mutation and verification.
+
+```text
+INSPECT (host; exact branch/base SHA + bounded tree)
+  -> SELECT READ EVIDENCE (model; strict JSON; no tools)
+  -> READ EXACT FILES (host)
+  -> PLAN (model; strict JSON; no tools)
+  -> VALIDATE_PLAN (host; schema/path/count/size/SHA policy)
+  -> APPLY (host; exact branch + expected blob SHA)
+  -> READ-BACK VERIFY (host; content + blob/head SHA)
+  -> EXECUTOR_CHECKPOINT
+  -> COMMIT_BOUND
+  -> existing exact-SHA CI / validators / review / audit
+  -> human-gated PR
+```
+
+The local planner is deliberately not given `task.write_file`, branch creation, PR, merge, arbitrary
+shell, deployment, release, training, activation, canonicalization, rollback or credential authority.
+Updates require exact expected blob SHA and may target only files whose complete content was supplied as
+read evidence. Creates require the target to be absent. Unknown fields, protected branches, sensitive
+paths, path traversal and GitHub workflow/action control paths fail closed.
+
+The task state machine remains compatible. `AGENT_RUNNING` now records bounded planner/executor work;
+`AGENT_COMPLETED` means planning completed, not that a repository mutation succeeded. A task reaches
+`COMMIT_BOUND` only after the host executor produces a real feature-branch HEAD different from the base
+SHA and exact compare evidence includes the executor's changed files. `FAILED` remains terminal for one
+task identity, so the same failed attempt is not silently rewritten or retried indefinitely.
+
+Implementation and operator details are in `docs/deterministic-local-executor.md`.
+
 ## APP1 — Operator Console
 
 APP1 provides project evidence, warnings, next-safe-boundaries and independently verified portfolio
@@ -65,9 +99,13 @@ planning across Score Restore, MusicXML → Guitar TAB, Score Editor and Real-Ti
 
 ## APP2 — Guarded task execution
 
-APP2 introduced opt-in loopback-only feature-branch execution. The model receives bounded repository
-reads and one host-bound `task.write_file` mutation. It cannot select `main`, create/approve/merge a
-PR, deploy, train, canonicalize or execute rollback.
+APP2 originally introduced opt-in loopback-only feature-branch execution with bounded repository reads
+and a host-bound `task.write_file` mutation. That legacy primitive remains branch-bound and cannot select
+`main`, create/approve/merge a PR, deploy, train, canonicalize or execute rollback.
+
+For the current local write-enabled application, direct model mutation is superseded by
+`MODEL_PLANS_HOST_EXECUTES`: the model receives no mutation tool and the host invokes the guarded
+mutation client only after strict plan validation.
 
 ## APP3 — Persistent execution evidence + CI/validators
 
@@ -90,6 +128,8 @@ PREVIEWED
 ```
 
 `FAILED` is terminal for a task identity. A model message such as "done" is never proof of success.
+Under deterministic local execution, `PLAN_VALIDATED` and per-write `EXECUTOR_CHECKPOINT` evidence are
+recorded without widening these stages.
 
 ## APP4 — Exact review + immutable revisions + PR binding
 
@@ -157,6 +197,9 @@ GET /api/tasks/audit/<task_id>
 GET /api/tasks/audit-verify/<task_id>
 GET /api/tasks/replay/<task_id>
 ```
+
+The deterministic local executor is mixed into the APP7-compatible service used by the default CLI;
+APP7 audit/replay authority is otherwise unchanged.
 
 ## APP8A — Bounded multi-agent supervisor
 
@@ -252,14 +295,18 @@ controlled operational pilot against real exact repository SHAs, documented in
 
 The task journal and APP8 graph journal are separate evidence layers. Neither journal grants authority.
 
-The model still has no branch argument on `task.write_file`, no PR-open tool, no PR approval tool, no
-thread-resolution tool and no merge tool. Local task mutations require a per-process `X-ST-Session`
-token. Credentials are resolved only inside trusted adapters.
+In deterministic local mode the model has no repository mutation tool at all. The host alone binds
+feature branch, expected blob SHA and write execution. Legacy APP2 `task.write_file` remains
+host-branch-bound when used directly, with no branch argument exposed to the model. Neither path exposes
+a PR-open tool, PR approval tool, thread-resolution tool or merge tool to the model. Local task
+mutations require a per-process `X-ST-Session` token. Credentials are resolved only inside trusted
+adapters.
 
 ## Explicitly unavailable
 
 - direct `main` / `master` mutation by the model;
 - arbitrary branch selection by the model;
+- repository mutation tools in deterministic local planner mode;
 - file deletion through the guarded task toolset;
 - autonomous PR approval;
 - review-thread resolution/dismissal authority;
@@ -290,4 +337,5 @@ token. Credentials are resolved only inside trusted adapters.
 14. Multi-agent supervision cannot bypass existing feature-branch/exact-SHA boundaries.
 15. Cross-project dependency progress requires typed verified receipts, not agent assertions.
 16. Persistent APP8 replay reconstructs evidence state only and does not imply execution authority.
-17. Tests define widened application behavior before merge.
+17. Small local models plan; host-side code owns repository mutation and exact verification.
+18. Tests define widened application behavior before merge.
