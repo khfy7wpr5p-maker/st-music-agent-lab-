@@ -7,8 +7,8 @@ from typing import Any
 
 from .app3_task_execution import App3GitHubReadClient, App3TaskService, _full_sha
 from .github_read import GitHubReadConfig, GitHubReadError
-from .task_execution import TaskExecutionError, TaskPreview
-from .task_state import TaskOutcome, TaskStage
+from .task_execution import TaskExecutionError
+from .task_state import TaskStage
 
 APP4_REVIEW_SCHEMA_VERSION = "1.0.0"
 _MAX_REVIEW_FILES = 100
@@ -218,9 +218,8 @@ class App4TaskService(App3TaskService):
         children = lineage.get("children", []) if isinstance(lineage, Mapping) else []
         revision_number = len(children) + 1
         decorated = (
-            f"{normalized_instruction}\n\n"
-            "APP4 revision context: "
-            f"mode={normalized_mode}; parent_task={parent_task_id}; revision={revision_number}. "
+            f"{normalized_instruction} APP4 revision context: mode={normalized_mode}; "
+            f"parent_task={parent_task_id}; revision={revision_number}. "
             "Treat parent task evidence as immutable. Make only the requested correction on the new "
             "bounded task branch; do not claim the parent was rewritten."
         )
