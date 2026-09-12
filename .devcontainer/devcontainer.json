@@ -1,0 +1,37 @@
+{
+  "name": "ST Music Agent Lab",
+  "customizations": {
+    "codespaces": {
+      "repositories": {
+        "khfy7wpr5p-maker/st-score-editor-core": {
+          "permissions": {
+            "actions": "read",
+            "contents": "write",
+            "pull_requests": "write"
+          }
+        },
+        "khfy7wpr5p-maker/st-score-restore-engine": {
+          "permissions": {
+            "actions": "read",
+            "contents": "write",
+            "pull_requests": "write"
+          }
+        },
+        "khfy7wpr5p-maker/musicxml-to-guitar-tab-engine": {
+          "permissions": {
+            "actions": "read",
+            "contents": "write",
+            "pull_requests": "write"
+          }
+        },
+        "khfy7wpr5p-maker/st-real-time-score-following-lab": {
+          "permissions": {
+            "actions": "read",
+            "contents": "write",
+            "pull_requests": "write"
+          }
+        }
+      }
+    }
+  }
+}
