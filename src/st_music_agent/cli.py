@@ -5,7 +5,7 @@ import json
 import sys
 from collections.abc import Sequence
 
-from .app6_web_app import serve_operator_console
+from .app7_web_app import serve_operator_console
 from .catalog import DEFAULT_MODELS
 from .contracts import AgentTask, ModelProfile, TaskKind
 from .execution import DirectAgentRunner
@@ -41,6 +41,9 @@ def build_app_parser() -> argparse.ArgumentParser:
     parser.add_argument("--github-api-base", default="https://api.github.com")
     parser.add_argument("--task-state-file")
     parser.add_argument("--enable-writes", action="store_true")
+    parser.add_argument("--remote-read-only", action="store_true")
+    parser.add_argument("--remote-auth-token-env")
+    parser.add_argument("--remote-secure-transport-attested", action="store_true")
     parser.add_argument("--profile", default="GLM-5.1")
     parser.add_argument("--provider-base-url")
     parser.add_argument("--provider-model")
@@ -69,6 +72,8 @@ def _run_app(argv: Sequence[str]) -> int:
     args = build_app_parser().parse_args(argv)
     if args.enable_writes:
         _profile(args.profile)
+    if args.enable_writes and args.remote_read_only:
+        raise SystemExit("--remote-read-only cannot be combined with --enable-writes")
     try:
         task_config = TaskExecutionConfig(
             enabled=args.enable_writes,
@@ -79,16 +84,19 @@ def _run_app(argv: Sequence[str]) -> int:
             github_token_env=args.github_token_env,
             github_api_base=args.github_api_base,
         )
+        serve_operator_console(
+            host=args.host,
+            port=args.port,
+            token_env=args.github_token_env or None,
+            api_base=args.github_api_base,
+            task_config=task_config,
+            state_path=args.task_state_file,
+            remote_read_only=args.remote_read_only,
+            remote_auth_token_env=args.remote_auth_token_env,
+            remote_secure_transport_attested=args.remote_secure_transport_attested,
+        )
     except ValueError as exc:
         raise SystemExit(str(exc)) from exc
-    serve_operator_console(
-        host=args.host,
-        port=args.port,
-        token_env=args.github_token_env or None,
-        api_base=args.github_api_base,
-        task_config=task_config,
-        state_path=args.task_state_file,
-    )
     return 0
 
 
