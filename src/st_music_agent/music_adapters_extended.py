@@ -21,13 +21,16 @@ _SCORE_EDITOR_ROADMAP_PATH = "ROADMAP.md"
 
 _SCORE_FOLLOWING_REPOSITORY = "khfy7wpr5p-maker/st-real-time-score-following-lab"
 _SCORE_FOLLOWING_README_PATH = "README.md"
-_SCORE_FOLLOWING_SF11_PATH = "benchmarks/reports/SF11_MIXED_ENSEMBLE.md"
+_SCORE_FOLLOWING_SF12_PATH = "benchmarks/reports/SF12_ORCHESTRA_GLOBAL.md"
 
 _EDITOR_PHASE = re.compile(r"The project is now in \*\*(.+?)\*\*")
 _EDITOR_NEXT = re.compile(r"\*\*(APP-11G — Tuplet Retiming Admission Foundation\.)\*\*")
 _FOLLOWING_HEAD = re.compile(r"Implementation head: `([0-9a-f]{40})`")
-_FOLLOWING_CI = re.compile(r"CI run `(\d+)` passed all (\d+) jobs")
-_FOLLOWING_AUTHORITY = re.compile(r"Authority boundary: `([^`]+)`")
+_FOLLOWING_CI = re.compile(r"Implementation CI: `(\d+)`")
+_FOLLOWING_AUTHORITY = re.compile(
+    r"Authority boundary:\s*\n\s*`([^`]+)`",
+    re.MULTILINE,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -137,70 +140,72 @@ class ScoreFollowingEvidenceAdapter:
     def collect(self, ref: str = "main") -> MusicEvidenceSnapshot:
         _require_repository(self.client, _SCORE_FOLLOWING_REPOSITORY)
         readme = _read_text(self.client, _SCORE_FOLLOWING_README_PATH, ref)
-        sf11 = _read_text(self.client, _SCORE_FOLLOWING_SF11_PATH, ref)
+        sf12 = _read_text(self.client, _SCORE_FOLLOWING_SF12_PATH, ref)
 
         readme_markers = (
-            "SF-11 Mixed Ensemble is complete",
-            "SF-12 Orchestra Global Score Following is the next autonomous stage",
+            "SF-12 Orchestra Global Score Following is complete",
+            "SF-13 Orchestra Section Research is the next autonomous stage",
             "Experimental evidence is not production or pedagogical authority.",
             "SF-04 Solo Violin remains a narrow real-evidence rights gate",
+            "Orchestra-global evidence is measure/beat authority only",
         )
         for marker in readme_markers:
             _require_marker(readme.content, marker, "score-following README")
 
         report_markers = (
-            "This evidence does **not** establish acoustic mono-mixture source separation",
-            "Shared confidence unavailable.",
-            "The benchmark is synthetic, repository-owned, and channel-separated.",
-            "Asynchrony, divergence, quorum loss, and abstention are evidence states rather than quality grades.",
-            "SF-11 is complete for deterministic channel-separated mixed-ensemble provenance",
+            "global orchestra measure/beat tracking only",
+            "It does not emit or infer per-instrument transcription",
+            "Confidence unavailability remains explicit.",
+            "Real orchestral audio validation remains dataset/license-gated.",
+            "production readiness or pedagogical authority",
+            "SF-12 is **complete for repository-owned deterministic global measure/beat structural evidence",
         )
         for marker in report_markers:
-            _require_marker(sf11.content, marker, "SF-11 permanent evidence")
+            _require_marker(sf12.content, marker, "SF-12 permanent evidence")
 
-        implementation_head = _extract(_FOLLOWING_HEAD, sf11.content, "SF-11 implementation head")
-        ci_match = _FOLLOWING_CI.search(sf11.content)
-        if ci_match is None:
-            raise MusicEvidenceError("SF-11 CI evidence is missing")
-        ci_run = ci_match.group(1)
-        ci_jobs = int(ci_match.group(2))
+        implementation_head = _extract(_FOLLOWING_HEAD, sf12.content, "SF-12 implementation head")
+        ci_run = _extract(_FOLLOWING_CI, sf12.content, "SF-12 CI evidence")
         authority_boundary = _extract(
             _FOLLOWING_AUTHORITY,
-            sf11.content,
-            "SF-11 authority boundary",
+            sf12.content,
+            "SF-12 authority boundary",
         )
 
         claims = {
-            "completed_stage": "SF-11",
-            "next_stage": "SF-12",
+            "completed_stage": "SF-12",
+            "next_stage": "SF-13",
             "research_evidence_is_production_authority": False,
             "research_evidence_is_pedagogical_authority": False,
-            "channel_separated_deterministic_evidence": True,
+            "global_measure_beat_research_evidence": True,
+            "per_instrument_transcription_authority": False,
+            "real_orchestral_audio_authority": False,
             "acoustic_mono_mixture_authority": False,
+            "calibrated_global_confidence_available": False,
             "shared_confidence_status": "unavailable",
             "sf04_real_evidence_rights_gate_remains": True,
-            "sf11_authority_boundary": authority_boundary,
-            "sf11_implementation_head": implementation_head,
-            "sf11_ci_run": ci_run,
-            "sf11_ci_jobs_passed": ci_jobs,
+            "sf12_authority_boundary": authority_boundary,
+            "sf12_implementation_head": implementation_head,
+            "sf12_ci_run": ci_run,
         }
         return MusicEvidenceSnapshot(
             project=MusicProject.REAL_TIME_SCORE_FOLLOWING,
             authority=EvidenceAuthority.PERMANENT_RESEARCH_EVIDENCE,
-            state="SF11_COMPLETE_SF12_NEXT_RESEARCH",
+            state="SF12_COMPLETE_SF13_NEXT_RESEARCH",
             summary=(
-                "SF-11 provides validated deterministic channel-separated mixed-ensemble "
-                "research evidence. Orchestra-scale global following is still the next research "
-                "stage, and the evidence is not production or pedagogical authority."
+                "SF-12 provides validated repository-owned deterministic orchestra-global "
+                "measure/beat research evidence. It does not establish per-instrument "
+                "transcription, real orchestral-audio robustness, production readiness or "
+                "pedagogical authority."
             ),
             claims=claims,
             warnings=(
-                "SF-11 evidence is synthetic and channel-separated, not acoustic mono-mixture authority",
+                "SF-12 evidence is synthetic aggregate-texture measure/beat research, not real orchestral-audio authority",
+                "per-instrument and section transcription authority remains explicitly excluded",
                 "SF-04 real violin evidence remains a separate rights-gated evidence path",
-                "shared confidence remains unavailable rather than synthesized",
+                "calibrated global confidence remains unavailable rather than synthesized",
             ),
-            next_safe_boundary="SF-12 Orchestra Global Score Following research",
-            sources=(readme.source, sf11.source),
+            next_safe_boundary="SF-13 Orchestra Section Research",
+            sources=(readme.source, sf12.source),
         )
 
 
