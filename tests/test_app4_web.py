@@ -61,29 +61,53 @@ def _app(service: FakeTaskService) -> App4OperatorConsoleApplication:
     )
 
 
-def test_review_get_is_read_only_but_ack_requires_session() -> None:
+def test_review_snapshot_and_ack_both_require_session() -> None:
     service = FakeTaskService()
     app = _app(service)
     task_id = "task:" + "a" * 64
+    review_payload = _body({"task_id": task_id})
 
-    review = app.dispatch("GET", f"/api/tasks/review/{task_id}")
-    denied = app.dispatch(
+    denied_review = app.dispatch(
+        "POST",
+        "/api/tasks/review",
+        body=review_payload,
+        headers={},
+    )
+    allowed_review = app.dispatch(
+        "POST",
+        "/api/tasks/review",
+        body=review_payload,
+        headers={"X-ST-Session": "session-4"},
+    )
+    denied_ack = app.dispatch(
         "POST",
         "/api/tasks/ack-review",
         body=_body({"task_id": task_id, "review_digest": "c" * 64}),
         headers={},
     )
-    allowed = app.dispatch(
+    allowed_ack = app.dispatch(
         "POST",
         "/api/tasks/ack-review",
         body=_body({"task_id": task_id, "review_digest": "c" * 64}),
         headers={"X-ST-Session": "session-4"},
     )
 
-    assert review.status == 200
-    assert denied.status == 403
-    assert allowed.status == 200
+    assert denied_review.status == 403
+    assert allowed_review.status == 200
+    assert denied_ack.status == 403
+    assert allowed_ack.status == 200
     assert service.calls == [("review", task_id), ("ack", task_id)]
+
+
+def test_review_get_has_no_mutating_route() -> None:
+    service = FakeTaskService()
+    app = _app(service)
+    task_id = "task:" + "a" * 64
+
+    response = app.dispatch("GET", f"/api/tasks/review/{task_id}")
+
+    assert response.status == 404
+    assert service.calls == []
 
 
 def test_revision_requires_session_and_preserves_explicit_mode() -> None:
