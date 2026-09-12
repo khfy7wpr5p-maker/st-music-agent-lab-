@@ -1,6 +1,6 @@
 # ST Music Agent Lab — Architecture Map
 
-Status: A1-A26 guarded core + APP1-APP6 runnable guarded application
+Status: A1-A26 guarded core + APP1-APP7 runnable guarded application
 Date: 2026-09-12
 
 ## Purpose
@@ -8,7 +8,7 @@ Date: 2026-09-12
 ST Music Agent Lab is the model-agnostic engineering and music-intelligence control layer for ST
 projects. The A1-A26 core owns policy, tools, budgets, approvals, evidence, verification, learning,
 training/model lifecycle, canonical-baseline history, drift and rollback-recovery boundaries.
-APP1-APP6 provide the runnable operator application above those boundaries.
+APP1-APP7 provide the runnable operator application above those boundaries.
 
 ## Core map
 
@@ -31,6 +31,8 @@ ST music repositories
   -> bounded PR collaboration evidence
   -> trustworthy GraphQL thread resolution when available
   -> bounded audit JSON + journal anchor hash
+  -> export digest/structure verification
+  -> local hash-journal verification + deterministic evidence replay
   -> curated data / training contract
   -> immutable model candidate
   -> paired benchmark + promotion review
@@ -101,12 +103,8 @@ false. Raw PR comment bodies are not persisted; only body hashes/lengths are ret
 
 ## APP6 — Validator health + trusted resolution + audit export
 
-APP6 hardens operational use of APP5 evidence.
-
-### Validator freshness
-
-Each explicit evidence refresh creates `VALIDATOR_HEALTH_SNAPSHOT`, bound to the exact validator event
-sequence/hash. Current freshness is 900 seconds.
+APP6 adds `VALIDATOR_HEALTH_SNAPSHOT`, bound to the exact validator event sequence/hash. Current
+freshness is 900 seconds.
 
 ```text
 all PASS + exact HEAD -> HEALTHY
@@ -115,45 +113,106 @@ FAIL/wrong commit -> UNHEALTHY
 ```
 
 At read time the snapshot becomes `FRESH_*` or `STALE_*`. Expiry never rewrites historical
-`VERIFIED_SUCCESS`, but a new PR-open action requires `FRESH_HEALTHY` evidence and therefore fails
-closed when validation is stale.
-
-### Review-thread resolution
+`VERIFIED_SUCCESS`, but a new PR-open action requires `FRESH_HEALTHY` evidence.
 
 For `api.github.com`, APP6 uses GitHub GraphQL `PullRequest.reviewThreads.isResolved` as the trusted
-resolution source. The adapter is bounded to 100 threads and 20 comments per thread. Unsupported,
-failed or truncated GraphQL evidence stays explicitly unavailable; resolution is never inferred from
-comment text.
+resolution source. Unsupported, failed or truncated GraphQL evidence remains explicitly unavailable.
+The application cannot resolve/unresolve/dismiss a thread or approve a PR.
 
-The application still cannot resolve/unresolve/dismiss a thread or approve a PR.
+APP6 also exposes a bounded audit projection containing exact task identity, CI, validators, health,
+review/PR evidence, lineage, journal event headers, an anchor sequence/hash and `audit_sha256`.
 
-### Audit export
+## APP7 — Deterministic audit verification/replay
 
-APP6 exposes a read-only task audit projection at:
+APP7 separates export integrity from source-journal authenticity.
+
+### Export verification
+
+`verify_audit_export()` recomputes `audit_sha256`, checks exported journal counts/anchors and verifies
+that merge/production authority remains false. A successful result is `STRUCTURE_VERIFIED`; it
+explicitly sets `source_journal_authenticated: false` because a standalone export cannot prove which
+journal produced it.
+
+### Local verification
+
+`verify_current_audit()` compares the export with the actual local hash-chained journal:
+
+- local latest task sequence == audit anchor sequence;
+- local latest task hash == audit anchor hash;
+- deterministic replay stage == audit stage;
+- deterministic replay outcome == audit outcome.
+
+The underlying `TaskEventStore` validates the global append-only SHA-256 chain when loading the journal.
+
+### Deterministic replay
+
+`replay_task()` walks recorded task events, checks the APP3 stage-transition graph and derives the final
+stage/outcome. Replay emits a deterministic digest over event headers and derived state.
+
+Replay is **evidence replay**, not execution replay. It does not rerun a model, GitHub mutation, CI,
+external validator, deployment, training, activation, canonicalization or rollback.
+
+Read-only endpoints are:
 
 ```text
 GET /api/tasks/audit/<task_id>
+GET /api/tasks/audit-verify/<task_id>
+GET /api/tasks/replay/<task_id>
 ```
 
-The bundle contains exact repo/commit identity, CI, validators, health, review digests, PR binding,
-collaboration summary, lineage, bounded journal event headers, journal anchor sequence/hash and an
-`audit_sha256`. Provider chain-of-thought, credentials and raw PR comment bodies are excluded.
+## APP7 — Authenticated remote read-only operator
 
-### APP6 evidence event
+Remote operation is a separate authority profile, not a remotely exposed version of local write mode.
+
+### Authentication
+
+Remote mode requires `--remote-read-only` plus an environment-variable name containing a bearer token
+of at least 24 characters. The application keeps the SHA-256 digest for constant-time comparison; the
+browser keeps the entered bearer token in `sessionStorage`.
+
+Only `/` and `/api/remote-mode` are public. They expose the login shell/capability metadata, not task
+or project evidence. Other data endpoints require `Authorization: Bearer ...`.
+
+### Mutation confinement
+
+In remote mode:
+
+- `TaskExecutionConfig.enabled` must be false;
+- `/api/session` returns no write-session token;
+- every non-GET request returns `405 remote_read_only` before inherited mutation handlers execute;
+- task execution, evidence-refresh journal writes, exact-review loading/acknowledgement, revisions and
+  PR creation are unavailable;
+- merge/auto-merge, review-thread mutation and production lifecycle actions remain unavailable.
+
+### Network threat boundary
+
+The built-in `ThreadingHTTPServer` does not provide TLS. Normal APP7 mode therefore rejects every
+non-loopback bind. A non-loopback bind is accepted only in authenticated remote read-only mode and only
+when the operator explicitly provides `--remote-secure-transport-attested`.
+
+That flag is a human assertion, not transport detection. It is intended for an existing SSH tunnel,
+private encrypted VPN/tunnel or TLS reverse proxy. Direct public-internet exposure of the built-in HTTP
+listener is outside the APP7 threat model.
+
+The preferred remote topology is:
 
 ```text
-VALIDATOR_HEALTH_SNAPSHOT
+remote browser
+  -> authenticated encrypted tunnel / TLS proxy
+  -> 127.0.0.1 APP7 remote-read-only listener
+  -> authenticated GET-only evidence APIs
 ```
 
-APP6 does not add or skip task stages.
+## Persistent evidence and authority boundaries
 
-## Branch and HTTP confinement retained
+APP7 does not add or skip task stages and does not need a new journal event. Audit verification and
+replay are derived read-only evidence.
 
-The model has no branch argument on `task.write_file`, no PR-open tool, no PR approval tool, no thread
-resolution tool and no merge tool. Task mutations require a per-process `X-ST-Session` token. Write
-mode is loopback-only. Credentials are resolved only inside trusted adapters.
+The model still has no branch argument on `task.write_file`, no PR-open tool, no PR approval tool, no
+thread-resolution tool and no merge tool. Local task mutations require a per-process `X-ST-Session`
+token. Credentials are resolved only inside trusted adapters.
 
-## Explicitly unavailable in APP6
+## Explicitly unavailable in APP7
 
 - direct `main` / `master` mutation;
 - arbitrary branch selection by the model;
@@ -164,7 +223,8 @@ mode is loopback-only. Credentials are resolved only inside trusted adapters.
 - release/deployment;
 - training execution;
 - model activation/canonicalization;
-- rollback execution.
+- rollback execution;
+- remote write execution.
 
 ## A1-A26 invariants retained
 
@@ -179,10 +239,12 @@ mode is loopback-only. Credentials are resolved only inside trusted adapters.
 9. Engineering success/review/audit metadata is not production authority or domain correctness.
 10. Exact commit identity is required wherever CI/validator/review evidence widens task state.
 11. Earlier task, revision, collaboration and health evidence cannot be silently replaced.
-12. Tests define widened application behavior before merge.
+12. Standalone export integrity is not misrepresented as source-journal authentication.
+13. Remote access may reduce authority but may not silently widen it.
+14. Tests define widened application behavior before merge.
 
-## Next application boundary — APP7
+## Future application boundary
 
-A later APP7 should be justified by daily operator needs. Likely candidates are deterministic audit
-verification/replay and a separately threat-modeled authenticated remote operator mode. Neither should
-implicitly add merge or production authority.
+No APP8 authority expansion is implied by APP7. A future stage should be justified by observed daily
+operator needs and must preserve the same separation between evidence, human approval and production
+authority.
