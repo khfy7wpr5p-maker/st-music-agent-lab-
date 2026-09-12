@@ -5,7 +5,7 @@ import json
 import sys
 from collections.abc import Sequence
 
-from .app7_web_app import serve_operator_console
+from .app8_web_app import serve_operator_console
 from .catalog import DEFAULT_MODELS
 from .contracts import AgentTask, ModelProfile, TaskKind
 from .execution import DirectAgentRunner
@@ -40,6 +40,7 @@ def build_app_parser() -> argparse.ArgumentParser:
     parser.add_argument("--github-token-env", default="GITHUB_TOKEN")
     parser.add_argument("--github-api-base", default="https://api.github.com")
     parser.add_argument("--task-state-file")
+    parser.add_argument("--app8-graph-state-file")
     parser.add_argument("--enable-writes", action="store_true")
     parser.add_argument("--remote-read-only", action="store_true")
     parser.add_argument("--remote-auth-token-env")
@@ -91,6 +92,7 @@ def _run_app(argv: Sequence[str]) -> int:
             api_base=args.github_api_base,
             task_config=task_config,
             state_path=args.task_state_file,
+            graph_state_path=args.app8_graph_state_file,
             remote_read_only=args.remote_read_only,
             remote_auth_token_env=args.remote_auth_token_env,
             remote_secure_transport_attested=args.remote_secure_transport_attested,
