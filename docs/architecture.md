@@ -1,6 +1,6 @@
 # ST Music Agent Lab — Architecture Map
 
-Status: A1-A26 guarded core + APP1-APP4 runnable guarded application
+Status: A1-A26 guarded core + APP1-APP5 runnable guarded application
 Date: 2026-09-12
 
 ## Purpose
@@ -8,7 +8,7 @@ Date: 2026-09-12
 ST Music Agent Lab is the model-agnostic engineering and music-intelligence control layer for ST
 projects. The A1-A26 core owns policy, tools, budgets, approvals, evidence, verification, learning,
 training/model lifecycle, canonical-baseline history, drift and rollback-recovery boundaries.
-APP1-APP4 provide the runnable operator application above those boundaries.
+APP1-APP5 provide the runnable operator application above those boundaries.
 
 ## Core map
 
@@ -19,12 +19,14 @@ ST music repositories
   -> independent verifier
   -> guarded reversible execution
   -> persistent exact task evidence
-  -> exact-SHA CI + typed validators
+  -> exact-SHA CI
+  -> generic + project-specific typed validators
   -> VERIFIED_SUCCESS
   -> bounded exact diff review
   -> human review acknowledgement bound to review_digest + HEAD
   -> human-gated PR creation
-  -> exact PR head/base review evidence
+  -> exact PR head/base evidence
+  -> bounded PR review/thread/conversation evidence
   -> curated data / training contract
   -> immutable model candidate
   -> paired benchmark + promotion review
@@ -42,52 +44,21 @@ Critical production actions never become model self-authority.
 
 ## APP1 — Operator Console
 
-APP1 starts with `st-music-agent app` and provides a mobile-friendly local web interface for:
-
-- Score Restore;
-- MusicXML → Guitar TAB;
-- Score Editor;
-- Real-Time Score Following;
-- project state, warnings and next safe boundary;
-- fresh portfolio planning with deterministic independent verification.
-
-Per-project evidence failures are isolated so one unavailable repository does not crash the whole
-console.
+APP1 provides project evidence, warnings, next-safe-boundaries and verified portfolio planning across
+Score Restore, MusicXML → Guitar TAB, Score Editor and Real-Time Score Following.
 
 ## APP2 — Guarded task execution
 
-APP2 introduced an explicit task preview/run/PR boundary without creating a second mutation
-architecture. Write mode is opt-in and loopback-only. The model can use bounded repository reads and
-one `task.write_file` mutation whose branch is injected by the host. It cannot select `main`, create a
-PR, merge, deploy, train, canonicalize or execute rollback.
+APP2 introduced opt-in loopback-only feature-branch execution. The model receives bounded reads and one
+host-bound `task.write_file` mutation. It cannot select `main`, create/approve/merge a PR, deploy,
+train, canonicalize or execute rollback.
 
-## APP3 — Persistent execution evidence + CI/validator
+## APP3 — Persistent execution evidence + CI/validators
 
-APP3 keeps the APP2 write boundary and adds a durable evidence plane.
+APP3 adds the append-only SHA-256 task journal, exact final task HEAD, bounded base...HEAD evidence,
+exact-SHA CI selection and typed `PASS / FAIL / UNAVAILABLE` validators.
 
-```text
-browser instruction
-  -> exact repository + base SHA
-  -> deterministic st-agent/<project>/<task> feature branch
-  -> append PREVIEWED to local hash-chained journal
-  -> explicit Run click
-  -> bounded ToolLoopRunner + task.write_file
-  -> resolve exact final feature-branch HEAD
-  -> exact base...HEAD compare
-  -> CI_PENDING
-  -> explicit host/browser CI refresh
-  -> exact-SHA workflow selection
-  -> typed validators: PASS / FAIL / UNAVAILABLE
-  -> VERIFIED_SUCCESS only when required evidence passes
-```
-
-### APP3 persistent journal
-
-The task store is append-only JSONL with a SHA-256 hash chain. It stores structured public task
-metadata and bounded execution evidence, never provider chain-of-thought, API key values or raw
-credentials.
-
-Primary stage machine:
+Primary task stages remain:
 
 ```text
 PREVIEWED
@@ -102,91 +73,65 @@ PREVIEWED
   -> PR_OPENED
 ```
 
-`FAILED` is terminal for a task identity. Stage skipping is rejected. Earlier evidence is retained.
+`FAILED` is terminal for a task identity. No model message such as "done" is treated as success.
 
-### Exact execution evidence
+## APP4 — Exact review + immutable revisions + PR binding
 
-A model message such as "done" is never success. APP3 requires a final full commit SHA different from
-the preview base, then binds bounded changed-file evidence to the exact base/head pair.
+APP4 binds a bounded exact patch review to the task base/head pair, computes per-file patch digests and
+a deterministic `review_digest`, requires explicit human acknowledgement, then allows a separate human
+PR-open action. Missing/truncated patch evidence cannot be acknowledged.
 
-### CI tracking
+Retry/amend does not rewrite history: it creates a new child task with append-only lineage evidence.
+APP4 also persists `PR_REVIEW_SNAPSHOT` for exact PR head/base binding.
 
-Core logic has no uncontrolled polling loop. CI is refreshed only by an explicit host/browser request.
-Runs from another SHA cannot satisfy the task. Incomplete runs remain pending; completed non-success
-runs fail the task.
+## APP5 — Project validation + PR collaboration evidence
 
-### Validator contract
+APP5 turns the generic validator plane into real project-aware validation without confusing CI with
+music-domain correctness.
 
-Validator results contain name, `PASS` / `FAIL` / `UNAVAILABLE`, evidence reference, exact commit SHA
-and bounded public message. `UNAVAILABLE` cannot silently become `PASS`.
+For every new APP5 task, the authoritative evidence adapter for that project is re-run using the exact
+task HEAD as its Git ref:
 
-## APP4 — Exact review + immutable revisions + PR evidence
+- Score Restore -> `score_restore_current_truth`;
+- MusicXML → Guitar TAB -> `tab_capability_contract`;
+- Score Editor -> `score_editor_release_boundary`;
+- Real-Time Score Following -> `score_following_research_boundary`.
 
-APP4 adds a human review plane without widening merge or production authority.
+Each adapter must return evidence sources for the exact task HEAD. Contract violations are `FAIL`;
+unreadable evidence remains `UNAVAILABLE`, never `PASS`.
+
+### Project invariants
+
+APP5 preserves project-specific safety boundaries rather than inventing one global music validator.
+Examples include:
+
+- Score Restore: no automatic production promotion; OMR/musical truth not implied;
+- TAB: `REVIEW_REQUIRED` remains capability-driven; canonical/export stays PASS-only;
+- Score Editor: planned capability remains distinct from production; release/cutover gates stay closed
+  unless separately authorized;
+- Score Following: research evidence is not production/pedagogical authority and does not imply
+  acoustic mono-mixture authority.
+
+### PR collaboration evidence
+
+After PR creation, an explicit session-token-protected refresh reads bounded review collaboration
+information. APP5 separates reviews for the exact task HEAD from stale reviews for older commits and
+stores review submissions, inline comment threads and general PR conversation evidence.
+
+GitHub REST does not expose review-thread resolution state in this runtime adapter. APP5 records that
+state as `unavailable` rather than inferring it.
+
+The append-only event is:
 
 ```text
-VERIFIED_SUCCESS
-  -> load bounded exact base...HEAD patch review
-  -> calculate per-file patch SHA-256 digests
-  -> calculate deterministic review_digest
-  -> reject acknowledgement if any patch is missing/truncated
-  -> explicit human acknowledgement for review_digest + exact HEAD
-  -> recheck feature branch still equals exact task HEAD
-  -> explicit human Open PR action
-  -> read back PR head/base metadata
-  -> append PR_REVIEW_SNAPSHOT
-  -> merge remains unavailable
+PR_COLLABORATION_SNAPSHOT
 ```
 
-### Bounded exact diff review
+It always contains `merge_authorized: false`.
 
-APP4 projects at most 100 changed files, at most 16,000 displayed patch characters per file and at
-most 160,000 displayed patch characters across the review. The digest is based on commit identity and
-per-file patch digests/statistics rather than trusting the rendered UI alone.
+## Persistent evidence events
 
-If GitHub omits a textual patch or APP4 must truncate it, the review becomes incomplete. Incomplete
-review evidence cannot be acknowledged and therefore cannot open a PR through APP4.
-
-Deterministic attention labels highlight workflow/build configuration changes, removals/renames,
-large changes and incomplete patches. These labels are review hints, not semantic correctness claims.
-
-### Human review acknowledgement
-
-`REVIEW_ACKNOWLEDGED` is append-only and bound to both the exact task HEAD and `review_digest`.
-Moving the branch makes that acknowledgement stale. APP4 rechecks branch identity before PR creation.
-
-This acknowledgement is not merge approval, release authorization or musical correctness.
-
-### Retry / amend lineage
-
-APP4 never rewrites failed or completed parent history.
-
-- `retry` is allowed only for a `FAILED` parent task;
-- `amend` requires exact parent commit evidence;
-- a new deterministic child task is previewed through the existing APP3 path;
-- parent and child receive append-only lineage events;
-- parent stage/outcome/evidence remains unchanged;
-- the child later receives its own branch, CI, validator, review and PR evidence.
-
-This makes failed and superseded attempts auditable instead of silently converting them into success.
-
-### Exact PR review evidence
-
-After PR creation APP4 persists a `PR_REVIEW_SNAPSHOT` that binds:
-
-- exact task HEAD;
-- acknowledged review digest;
-- PR number;
-- PR head/base SHA metadata;
-- draft/mergeable metadata when available;
-- an exact-head-match flag.
-
-The operator may explicitly refresh this metadata. A PR whose head/base no longer matches the verified
-task evidence fails closed.
-
-### APP4 journal evidence events
-
-APP4 adds evidence events without changing the APP3 stage machine:
+The APP3 stage machine is unchanged. Additional review/evidence events include:
 
 ```text
 REVIEW_SNAPSHOT
@@ -194,29 +139,22 @@ REVIEW_ACKNOWLEDGED
 LINEAGE_PARENT
 LINEAGE_CHILD_CREATED
 PR_REVIEW_SNAPSHOT
+PR_COLLABORATION_SNAPSHOT
 ```
 
-## Branch confinement retained
+## Branch and HTTP confinement retained
 
-The model does not receive `github.create_branch`, `github.open_pull_request` or merge tools. Its only
-mutation tool is `task.write_file`, whose schema has no branch field. The host injects the exact
-feature branch.
+The model still has no branch field on `task.write_file`, no PR-open tool, no PR approval tool and no
+merge tool. Task POSTs require a random per-process `X-ST-Session` token. Write mode is loopback-only.
+Credentials are resolved only inside trusted adapters.
 
-Repository discovery remains bounded: recursive tree truncation fails closed, credential-sensitive
-paths are filtered, and excessive file counts are rejected rather than silently hidden.
-
-## HTTP boundary retained
-
-Task POSTs require a random per-process `X-ST-Session` token and bounded JSON bodies. Feature-branch
-execution requires `--enable-writes`; write mode refuses non-loopback HTTP binding. Provider/GitHub
-credentials are configured by environment-variable name and resolved only inside trusted adapters.
-
-## Explicitly unavailable in APP4
+## Explicitly unavailable in APP5
 
 - direct `main` / `master` mutation;
 - arbitrary branch selection by the model;
 - file deletion;
-- autonomous PR creation;
+- autonomous PR creation or approval;
+- review-thread resolution/dismissal authority;
 - merge / auto-merge;
 - release/deployment;
 - training execution;
@@ -233,13 +171,13 @@ credentials are configured by environment-variable name and resolved only inside
 6. Plans and lifecycle widening are independently recomputed from evidence.
 7. Training, activation, canonicalization and rollback remain separate host-authorized boundaries.
 8. Baseline history is append-only; failed generations are retained.
-9. Engineering success/review acknowledgement is not production authority or domain correctness.
+9. Engineering success/review metadata is not production authority or domain correctness.
 10. Exact commit identity is required wherever CI/validator/review evidence widens task state.
-11. Earlier task and revision evidence is append-only and cannot be silently replaced.
+11. Earlier task, revision and collaboration evidence is append-only and cannot be silently replaced.
 12. Tests define widened application behavior before merge.
 
-## Next application boundary — APP5
+## Next application boundary — APP6
 
-APP5 should focus on real project-specific validator adapters and richer PR review collaboration
-(review/thread evidence, project-aware validation summaries) while keeping merge and production
-authority outside the agent application.
+APP6 should focus on operational hardening of validator health/freshness, richer review-resolution
+adapters where trustworthy APIs are available, and audit/export ergonomics. Merge and production
+authority must remain outside the agent application.
