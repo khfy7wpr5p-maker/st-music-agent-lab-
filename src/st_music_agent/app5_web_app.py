@@ -4,7 +4,7 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from .app4_web_app import App4OperatorConsoleApplication, _APP4_HTML
+from .app4_web_app import _APP4_HTML, App4OperatorConsoleApplication
 from .app5_task_execution import App5TaskService
 from .operator_console import OperatorConsoleService
 from .task_execution import TaskExecutionConfig, TaskExecutionError
