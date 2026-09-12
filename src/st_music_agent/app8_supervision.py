@@ -3,9 +3,10 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Iterable, Mapping
+from typing import Any
 
 from .contracts import AgentTask, TaskKind
 from .router import ModelRouter
@@ -662,7 +663,7 @@ class SupervisorSimulator:
         if not ready:
             return None
 
-        node = sorted(ready, key=lambda item: item.node_id)[0]
+        node = min(ready, key=lambda item: item.node_id)
         candidate_budget = replay.reserved_budget.plus(
             BudgetReservation.from_envelope(node.budget)
         )
