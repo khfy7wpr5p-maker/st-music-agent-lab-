@@ -1,6 +1,6 @@
 # ST Music Agent Lab — Architecture Map
 
-Status: A1-A26 guarded core + APP1-APP7 runnable guarded application
+Status: A1-A26 guarded core + APP1-APP8E bounded runnable application
 Date: 2026-09-12
 
 ## Purpose
@@ -8,9 +8,11 @@ Date: 2026-09-12
 ST Music Agent Lab is the model-agnostic engineering and music-intelligence control layer for ST
 projects. The A1-A26 core owns policy, tools, budgets, approvals, evidence, verification, learning,
 training/model lifecycle, canonical-baseline history, drift and rollback-recovery boundaries.
-APP1-APP7 provide the runnable operator application above those boundaries.
+APP1-APP8E provide the runnable operator/supervision application above those boundaries.
 
-## Core map
+Critical production actions never become model self-authority.
+
+## Full architecture map
 
 ```text
 ST music repositories
@@ -19,6 +21,7 @@ ST music repositories
   -> independent verifier
   -> guarded reversible feature-branch execution
   -> persistent exact task evidence
+  -> exact final commit identity
   -> exact-SHA CI
   -> generic + project-specific validators
   -> validator health/freshness
@@ -26,14 +29,23 @@ ST music repositories
   -> bounded exact diff review
   -> human review acknowledgement bound to review_digest + HEAD
   -> fresh-health gate before PR opening
-  -> human-gated PR creation
+  -> explicit human-gated PR creation
   -> exact PR head/base evidence
   -> bounded PR collaboration evidence
   -> trustworthy GraphQL thread resolution when available
   -> bounded audit JSON + journal anchor hash
   -> export digest/structure verification
   -> local hash-journal verification + deterministic evidence replay
-  -> curated data / training contract
+
+  -> APP8A bounded multi-agent supervisor graph
+  -> APP8B independent critic / reliability gate
+  -> APP8C guarded exact-SHA multi-agent implementation cycle
+  -> APP8D verified-receipt cross-project coordination
+  -> APP8E append-only persistent supervision/coordination graph
+  -> deterministic restart reconstruction + verification
+  -> authenticated read-only operator graph view
+
+  -> separately governed curated data / training contract
   -> immutable model candidate
   -> paired benchmark + promotion review
   -> separately authorized activation/canonicalization
@@ -45,8 +57,6 @@ ST music repositories
   -> repeated recovery evidence
   -> append-only rollback generation
 ```
-
-Critical production actions never become model self-authority.
 
 ## APP1 — Operator Console
 
@@ -122,37 +132,25 @@ The application cannot resolve/unresolve/dismiss a thread or approve a PR.
 APP6 also exposes a bounded audit projection containing exact task identity, CI, validators, health,
 review/PR evidence, lineage, journal event headers, an anchor sequence/hash and `audit_sha256`.
 
-## APP7 — Deterministic audit verification/replay
+## APP7 — Deterministic audit verification/replay + remote read-only operator
 
 APP7 separates export integrity from source-journal authenticity.
 
-### Export verification
-
 `verify_audit_export()` recomputes `audit_sha256`, checks exported journal counts/anchors and verifies
-that merge/production authority remains false. A successful result is `STRUCTURE_VERIFIED`; it
-explicitly sets `source_journal_authenticated: false` because a standalone export cannot prove which
-journal produced it.
+that merge/production authority remains false. A successful result is `STRUCTURE_VERIFIED`; it does
+not claim source-journal authentication.
 
-### Local verification
+`verify_current_audit()` compares the export with the actual local hash-chained journal and requires
+matching journal anchor, deterministic replay stage and deterministic replay outcome.
 
-`verify_current_audit()` compares the export with the actual local hash-chained journal:
+`replay_task()` is evidence replay only. It does not rerun a model, GitHub mutation, CI, external
+validator, deployment, training, activation, canonicalization or rollback.
 
-- local latest task sequence == audit anchor sequence;
-- local latest task hash == audit anchor hash;
-- deterministic replay stage == audit stage;
-- deterministic replay outcome == audit outcome.
+Remote mode is authenticated GET-only. It never returns a write-session token. Non-loopback binding
+requires explicit secure-transport attestation because the built-in Python HTTP server does not provide
+TLS.
 
-The underlying `TaskEventStore` validates the global append-only SHA-256 chain when loading the journal.
-
-### Deterministic replay
-
-`replay_task()` walks recorded task events, checks the APP3 stage-transition graph and derives the final
-stage/outcome. Replay emits a deterministic digest over event headers and derived state.
-
-Replay is **evidence replay**, not execution replay. It does not rerun a model, GitHub mutation, CI,
-external validator, deployment, training, activation, canonicalization or rollback.
-
-Read-only endpoints are:
+Read-only APP7 endpoints include:
 
 ```text
 GET /api/tasks/audit/<task_id>
@@ -160,71 +158,119 @@ GET /api/tasks/audit-verify/<task_id>
 GET /api/tasks/replay/<task_id>
 ```
 
-## APP7 — Authenticated remote read-only operator
+## APP8A — Bounded multi-agent supervisor
 
-Remote operation is a separate authority profile, not a remotely exposed version of local write mode.
+APP8A introduces typed multi-agent supervision contracts before allowing execution. The supervisor
+constructs a deterministic dependency graph with explicit roles, evidence dependencies, mutation
+classes, completion/abstention criteria and bounded budgets.
 
-### Authentication
+APP8A itself is non-mutating simulation. It cannot call a model or execute repository work merely by
+creating a graph.
 
-Remote mode requires `--remote-read-only` plus an environment-variable name containing a bearer token
-of at least 24 characters. The application keeps the SHA-256 digest for constant-time comparison; the
-browser keeps the entered bearer token in `sessionStorage`.
+## APP8B — Independent critic and reliability gates
 
-Only `/` and `/api/remote-mode` are public. They expose the login shell/capability metadata, not task
-or project evidence. Other data endpoints require `Authorization: Bearer ...`.
+APP8B adds a separate evidence-bound critic/reliability layer. Acceptance is not derived from the same
+agent that produced implementation output. Reliability gates remain explicit and fail closed when the
+required exact evidence is missing or inconsistent.
 
-### Mutation confinement
+Critic acceptance is evidence for the next guarded step; it is not merge, deployment or production
+authority.
 
-In remote mode:
+## APP8C — Guarded multi-agent execution
 
-- `TaskExecutionConfig.enabled` must be false;
-- `/api/session` returns no write-session token;
-- every non-GET request returns `405 remote_read_only` before inherited mutation handlers execute;
-- task execution, evidence-refresh journal writes, exact-review loading/acknowledgement, revisions and
-  PR creation are unavailable;
-- merge/auto-merge, review-thread mutation and production lifecycle actions remain unavailable.
+APP8C permits the bounded multi-agent architecture to reuse the existing APP2-APP7 reversible
+feature-branch execution path. Exact repository/base SHA, host-bound feature branch, final head,
+artifact digest, validators and reliability gate remain bound together.
 
-### Network threat boundary
+A successful implementation cycle can produce a verified completion record, but it cannot self-open or
+approve a PR, merge, deploy, train, activate/canonicalize a model or roll back production state.
 
-The built-in `ThreadingHTTPServer` does not provide TLS. Normal APP7 mode therefore rejects every
-non-loopback bind. A non-loopback bind is accepted only in authenticated remote read-only mode and only
-when the operator explicitly provides `--remote-secure-transport-attested`.
+## APP8D — Deterministic cross-project coordination
 
-That flag is a human assertion, not transport detection. It is intended for an existing SSH tunnel,
-private encrypted VPN/tunnel or TLS reverse proxy. Direct public-internet exposure of the built-in HTTP
-listener is outside the APP7 threat model.
+APP8D coordinates work across the four fixed ST repositories:
 
-The preferred remote topology is:
+- `khfy7wpr5p-maker/st-score-restore-engine`
+- `khfy7wpr5p-maker/musicxml-to-guitar-tab-engine`
+- `khfy7wpr5p-maker/st-score-editor-core`
+- `khfy7wpr5p-maker/st-real-time-score-following-lab`
+
+A `CrossProjectPlan` declares exact base SHAs, dependency edges, required upstream evidence, produced
+evidence and mutation class. Reversible feature-branch work is accepted only through an APP8C verified
+cycle whose APP8B gate accepted the same exact artifact/head. Read-only work uses a host-verified exact
+SHA receipt.
+
+The coordinator never invokes project execution itself. It only schedules dependency-ready work and
+accepts/rejects typed receipts. `REVIEW_REQUIRED`, `ABSTAINED` or `FAILED` upstream work deterministically
+blocks dependents instead of being guessed through.
+
+All APP8D plan/decision/receipt/replay authority flags keep repository mutation, PR opening, merge and
+production actions false.
+
+## APP8E — Persistent operator supervision graph
+
+APP8E persists APP8A supervision graphs and APP8D coordination graphs to a separate append-only,
+hash-chained JSONL journal:
 
 ```text
-remote browser
-  -> authenticated encrypted tunnel / TLS proxy
-  -> 127.0.0.1 APP7 remote-read-only listener
-  -> authenticated GET-only evidence APIs
+~/.st-music-agent/app8-graph-events.jsonl
 ```
+
+The journal validates global record order, per-graph event order, registration-before-event ordering,
+previous-record SHA-256 and current record SHA-256 on reload.
+
+APP8E reconstructs typed plans/events and deterministically replays state after process restart. Resume
+means state reconstruction only; it does not automatically run the next agent or mutation.
+
+Read-only operator endpoints are:
+
+```text
+GET /api/app8/graphs?limit=N
+GET /api/app8/graphs/<graph_id>
+GET /api/app8/graphs/<graph_id>/verify
+```
+
+Remote mode reuses APP7 bearer authentication. APP8 graph endpoints are GET-only and there is no APP8
+graph mutation endpoint.
+
+## APP8 completion boundary
+
+The current bounded APP8 architecture is complete at APP8E:
+
+```text
+APP8A Supervisor contracts/simulation
+  -> APP8B Independent critic/reliability
+  -> APP8C Guarded exact-SHA execution
+  -> APP8D Cross-project verified-receipt coordination
+  -> APP8E Persistent operator graph / deterministic resume
+```
+
+Further development must be driven by demonstrated operator needs. The immediate next step is a
+controlled operational pilot against real exact repository SHAs, documented in
+`docs/app8-operational-pilot.md`, not an automatic authority expansion.
 
 ## Persistent evidence and authority boundaries
 
-APP7 does not add or skip task stages and does not need a new journal event. Audit verification and
-replay are derived read-only evidence.
+The task journal and APP8 graph journal are separate evidence layers. Neither journal grants authority.
 
 The model still has no branch argument on `task.write_file`, no PR-open tool, no PR approval tool, no
 thread-resolution tool and no merge tool. Local task mutations require a per-process `X-ST-Session`
 token. Credentials are resolved only inside trusted adapters.
 
-## Explicitly unavailable in APP7
+## Explicitly unavailable
 
-- direct `main` / `master` mutation;
+- direct `main` / `master` mutation by the model;
 - arbitrary branch selection by the model;
-- file deletion;
-- autonomous PR creation or approval;
+- file deletion through the guarded task toolset;
+- autonomous PR approval;
 - review-thread resolution/dismissal authority;
-- merge / auto-merge;
+- merge / auto-merge inside the application;
 - release/deployment;
 - training execution;
 - model activation/canonicalization;
 - rollback execution;
-- remote write execution.
+- remote write execution;
+- APP8 graph mutation through HTTP;
+- privilege or credential mutation.
 
 ## A1-A26 invariants retained
 
@@ -241,10 +287,7 @@ token. Credentials are resolved only inside trusted adapters.
 11. Earlier task, revision, collaboration and health evidence cannot be silently replaced.
 12. Standalone export integrity is not misrepresented as source-journal authentication.
 13. Remote access may reduce authority but may not silently widen it.
-14. Tests define widened application behavior before merge.
-
-## Future application boundary
-
-No APP8 authority expansion is implied by APP7. A future stage should be justified by observed daily
-operator needs and must preserve the same separation between evidence, human approval and production
-authority.
+14. Multi-agent supervision cannot bypass existing feature-branch/exact-SHA boundaries.
+15. Cross-project dependency progress requires typed verified receipts, not agent assertions.
+16. Persistent APP8 replay reconstructs evidence state only and does not imply execution authority.
+17. Tests define widened application behavior before merge.
