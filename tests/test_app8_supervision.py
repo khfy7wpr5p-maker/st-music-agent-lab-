@@ -370,11 +370,11 @@ def test_complete_four_role_simulation_finishes_without_widening_authority() -> 
         "04-critic": "critic_report",
     }
 
-    for node_id in outputs:
+    for node_id, evidence_ref in outputs.items():
         decision = simulator.schedule_next()
         assert decision is not None
         assert decision.node_id == node_id
-        simulator.record_result(node_id, NodeOutcome.PASS, evidence_refs=(outputs[node_id],))
+        simulator.record_result(node_id, NodeOutcome.PASS, evidence_refs=(evidence_ref,))
 
     replay = simulator.replay()
     assert replay.disposition is SupervisorDisposition.COMPLETE
