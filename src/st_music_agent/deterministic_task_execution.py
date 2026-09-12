@@ -5,12 +5,7 @@ from typing import Any
 
 from .app3_task_execution import App3TaskService
 from .app7_task_execution import App7TaskService
-from .deterministic_executor import (
-    DeterministicExecutionError,
-    DeterministicExecutor,
-    PlanValidationError,
-    SmallModelPlanner,
-)
+from .deterministic_executor import DeterministicExecutionError, DeterministicExecutor, SmallModelPlanner
 from .policy import AutonomyDecision
 from .task_execution import TaskExecutionError, TaskRunRecord, _require_action
 from .task_state import TaskStage
