@@ -1,7 +1,3 @@
-import json
-import pathlib
-
-
 EXPECTED_REPOSITORIES = {
     "khfy7wpr5p-maker/st-score-editor-core": {
         "permissions": {
@@ -35,6 +31,8 @@ EXPECTED_REPOSITORIES = {
 
 
 def test_codespaces_cross_repo_permissions_are_explicit_and_bounded() -> None:
+    pathlib = __import__("pathlib")
+    json = __import__("json")
     config_path = pathlib.Path(__file__).parents[1] / ".devcontainer" / "devcontainer.json"
     config = json.loads(config_path.read_text(encoding="utf-8"))
 
