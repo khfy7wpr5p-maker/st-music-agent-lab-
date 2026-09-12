@@ -349,8 +349,8 @@ def _effective_health(value: Any, *, now: datetime) -> dict[str, Any]:
 
 def _parse_time(value: Any) -> datetime:
     if not isinstance(value, str):
-        raise ValueError("evidence timestamp is missing")
-    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        raise TypeError("evidence timestamp is missing")
+    parsed = datetime.fromisoformat(value)
     if parsed.tzinfo is None:
         raise ValueError("evidence timestamp must be timezone-aware")
     return parsed.astimezone(UTC)
