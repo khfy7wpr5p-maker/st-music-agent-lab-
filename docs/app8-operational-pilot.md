@@ -1,6 +1,7 @@
 # APP8 Operational Pilot — exact-SHA read-only first pass
 
-Status: controlled operational-readiness plan after APP8E completion.
+Status: P0 read-only evidence inspection executed; one upstream evidence-contract drift found and
+repaired fail-closed in ST Music Agent Lab.
 
 This document records the first evidence-driven step after APP8A-APP8E. It does not define a new
 application authority layer. The purpose is to prove that the completed APP8 architecture can observe,
@@ -8,24 +9,106 @@ coordinate and replay real ST project state before any broader execution scope i
 
 ## Snapshot captured on 2026-09-12
 
-The following `main` SHAs were read directly from the live GitHub repositories when this pilot was
-prepared. They are a point-in-time pilot snapshot, not a claim that these repositories will remain on
-these SHAs later.
+The following `main` SHAs were read directly from the live GitHub repositories during the pilot. They
+are point-in-time identities, not a claim that these repositories will remain on these SHAs later.
 
 | Project | Repository | Exact pilot SHA |
 | --- | --- | --- |
-| ST Music Agent Lab | `khfy7wpr5p-maker/st-music-agent-lab-` | `6465c7fa1adf113cb9e51e3f910d57d64b3d8090` |
+| ST Music Agent Lab | `khfy7wpr5p-maker/st-music-agent-lab-` | `ef813684e83347a595fb3b16dc98f1a0da9413f9` |
 | Score Restore | `khfy7wpr5p-maker/st-score-restore-engine` | `20f8df8fbbb4640083032672acd2f7d1e151aca3` |
 | MusicXML → Guitar TAB | `khfy7wpr5p-maker/musicxml-to-guitar-tab-engine` | `963274a5425488b07df153460409e491f56c423d` |
 | Score Editor | `khfy7wpr5p-maker/st-score-editor-core` | `6b0e2cac572dfcfa570bfab2bb8eb47a9d7f68fc` |
 | Real-Time Score Following | `khfy7wpr5p-maker/st-real-time-score-following-lab` | `a833bee18afffa29686325f5211adc575c7acfa7` |
 
-The pilot must fail closed if any work item expects a different SHA than the exact repository state
-being verified.
+The pilot fails closed if a work item expects a different SHA than the exact repository state being
+verified.
+
+## P0 observed evidence surfaces
+
+### Score Restore
+
+Exact source read at the pilot SHA:
+
+`docs/live/ST_SCORE_RESTORE_STAGE11_V2_SYMBOL_PRESERVATION_CURRENT_TRUTH.json`
+
+Observed contract still matches the adapter boundary:
+
+- artifact type `stage11_v2_symbol_preservation_current_truth`;
+- schema `1.2.0`;
+- `candidateCheckpointFrozen: true`;
+- `finalModelSelected: false`;
+- `stage12EntryAuthorized: false`;
+- `productionInferenceAuthorized: false`;
+- `omrCorrectnessNotImplied: true`;
+- `musicalTruthNotImplied: true`;
+- `automaticProductionPromotionForbidden: true`.
+
+Result: **P0 evidence contract compatible**. This is not a claim of OMR/musical correctness or
+production readiness.
+
+### MusicXML → Guitar TAB
+
+Exact sources read at the pilot SHA:
+
+- `src/app/reviewRequiredCapabilityContract.js`
+- `tests/workbenchCapabilityBridge.test.js`
+
+Observed contract still preserves:
+
+- `REVIEW_REQUIRED` score renderability when MusicXML exists;
+- provisional TAB availability when a TAB artifact exists;
+- approximate review playback when uncertainty affects playback;
+- canonical TAB/export PASS-only behavior;
+- BLOCKED playback disabled;
+- teacher editing authority narrower than render/TAB visibility.
+
+Result: **P0 evidence contract compatible**.
+
+### Score Editor
+
+Exact `ROADMAP.md` remains compatible with the release-boundary adapter:
+
+- repository reality is the declared source of truth;
+- manual device validation remains required;
+- standalone release gate remains false;
+- SesliTab V4 cutover remains unauthorized;
+- feature development must not open release/cutover gates.
+
+The same exact repository SHA also contains APP-11I implementation/regression files while the roadmap
+still declares APP-11G as its next development action. The adapter deliberately does not infer a newer
+product/release state from those unrelated implementation files.
+
+Result: **release-boundary contract compatible, source-of-truth freshness warning recorded**. The
+upstream Score Editor roadmap should eventually be refreshed separately, but this does not justify
+silently widening the adapter claim.
+
+### Real-Time Score Following
+
+P0 found a real fail-closed maintenance event.
+
+The repository had advanced from the adapter's old SF-11 evidence contract to:
+
+- README: SF-12 complete, SF-13 next;
+- permanent evidence: `benchmarks/reports/SF12_ORCHESTRA_GLOBAL.md`.
+
+The existing adapter still required the old SF-11 README wording and
+`benchmarks/reports/SF11_MIXED_ENSEMBLE.md`. Therefore current exact-head validation would become
+unavailable/fail rather than inventing a current state. That is the intended failure mode.
+
+The P0 repair updates the adapter to the SF-12 evidence surface and preserves these boundaries:
+
+- global orchestra evidence is measure/beat research only;
+- per-instrument/section transcription authority remains false;
+- real orchestral-audio authority remains false;
+- calibrated global confidence remains unavailable;
+- production and pedagogical authority remain false;
+- SF-13 Orchestra Section Research is the next safe research boundary.
+
+Result: **evidence-contract drift detected and repaired without widening authority**.
 
 ## Pilot P0 — read-only identity and evidence proof
 
-P0 deliberately performs no repository mutation.
+P0 deliberately performs no target-project repository mutation.
 
 For each of the four ST project repositories:
 
@@ -92,23 +175,19 @@ A practical first P1 candidate should be documentation, diagnostics, validation 
 reversible change that does not alter production behavior. The pilot should measure operator friction
 before any new architecture stage is proposed.
 
-## Measurements to collect
+## Measurements collected in P0
 
-The first real pilot should record:
+- four target repositories resolved to exact live SHAs;
+- Score Restore current-truth contract remained compatible;
+- TAB capability contract remained compatible;
+- Score Editor release-boundary contract remained compatible, with roadmap freshness lag recorded;
+- Real-Time Score Following evidence contract drifted from SF-11 to SF-12 and failed closed;
+- one adapter refresh was required; no target-project write was needed;
+- no merge/deploy/training/activation/rollback authority was required to repair the evidence adapter.
 
-- number of supervision nodes and APP8D work items;
-- model turns and tool calls consumed;
-- exact-SHA evidence refresh count;
-- validator outcomes and unavailable evidence;
-- critic/reliability disposition;
-- number of human gates encountered;
-- graph journal/replay verification result;
-- any stale-state, unclear-status or operator-UI friction;
-- any task that could not be represented without widening authority.
-
-These measurements determine whether the next change should be usability, diagnostics, validator
-coverage or orchestration ergonomics. A new execution authority must not be justified merely by the
-existence of the next version number.
+This is the first concrete operator-friction result: **upstream evidence contracts evolve faster than a
+static cross-project adapter catalog unless freshness is actively checked.** Future usability work
+should prioritize detecting and explaining this drift rather than bypassing it.
 
 ## Stop conditions
 
@@ -125,6 +204,7 @@ Stop the pilot and preserve the evidence if any of the following occurs:
 
 ## Current conclusion
 
-APP8A-APP8E is structurally complete. The next engineering question is no longer "what APP comes next?"
-but "what concrete operator friction appears when exact-SHA APP8 supervision is used against real ST
-project state?" This pilot is the evidence boundary for answering that question.
+APP8A-APP8E remains structurally complete. P0 demonstrated a real operational gap without requiring a
+new authority layer: **evidence adapter freshness**. The correct response was a bounded adapter/test/doc
+refresh, not weaker validation. After this repair is green on exact-head CI, the next safe action is P1:
+one low-risk reversible feature-branch cycle through the completed APP8 chain.
