@@ -4,7 +4,7 @@ import hashlib
 import json
 import re
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Protocol
 
@@ -119,6 +119,7 @@ class ExactCommitReadToolset:
         self.branch = branch
         self.expected_sha = _require_sha(expected_sha, "expected_sha")
         self._files = self._capture_tree()
+        self._paths = frozenset(item["path"] for item in self._files)
 
     def _capture_tree(self) -> tuple[dict[str, Any], ...]:
         branch = self.client.branch_info(self.branch)
@@ -189,7 +190,7 @@ class ExactCommitReadToolset:
         path = arguments.get("path")
         if not isinstance(path, str) or not path.strip():
             raise TypeError("path must be non-empty text")
-        if path not in {item["path"] for item in self._files}:
+        if path not in self._paths:
             raise ValueError("path is outside the captured exact-commit tree")
         value = self.client.read_file(path, self.expected_sha)
         if not isinstance(value, Mapping):
@@ -293,6 +294,8 @@ class ReadOnlySpecialistRunner:
             raise App8ExecutionError("read-only specialist role is not allowed")
         if node.mutation_class is not MutationClass.READ_ONLY:
             raise App8ExecutionError("read-only specialist node must use READ_ONLY mutation class")
+        if node.budget.max_tool_calls < 1:
+            raise App8ExecutionError("read-only specialist requires a positive declared tool budget")
         if not profile.supports(node.agent_task()):
             raise App8ExecutionError("selected model profile does not support the specialist task")
         self.node = node
@@ -316,7 +319,7 @@ class ReadOnlySpecialistRunner:
             registry,
             budget=ToolLoopBudget(
                 max_turns=self.node.budget.max_model_turns,
-                max_tool_calls=max(1, self.node.budget.max_tool_calls),
+                max_tool_calls=self.node.budget.max_tool_calls,
                 max_argument_chars=32_768,
                 max_elapsed_seconds=self.node.budget.max_elapsed_seconds,
                 max_model_facing_bytes=self.node.budget.max_model_facing_bytes,
