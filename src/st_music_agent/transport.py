@@ -25,7 +25,7 @@ class JsonRequest:
 @dataclass(frozen=True, slots=True)
 class JsonResponse:
     status_code: int
-    payload: Mapping[str, Any]
+    payload: Any
 
 
 class JsonTransport(Protocol):
@@ -70,7 +70,7 @@ class UrllibJsonTransport:
         except json.JSONDecodeError as exc:
             raise TransportError("remote service returned invalid JSON") from exc
 
-        if not isinstance(decoded, dict):
-            raise TransportError("remote service returned a non-object JSON payload")
+        if not isinstance(decoded, (dict, list)):
+            raise TransportError("remote service returned unsupported JSON payload")
 
         return JsonResponse(status_code=status_code, payload=decoded)

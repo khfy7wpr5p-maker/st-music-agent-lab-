@@ -9,12 +9,11 @@ The repository contains the A1-A26 guarded model lifecycle plus the runnable app
 
 - **APP1:** project evidence dashboard + independently verified portfolio planning;
 - **APP2:** opt-in, loopback-only guarded engineering tasks on a host-bound feature branch;
-- **APP3:** persistent resumable task evidence, exact commit/diff binding, explicit CI/validator
-  review, and a human-triggered PR flow gated by `VERIFIED_SUCCESS`;
-- **APP4:** bounded exact diff review, human review acknowledgement, immutable retry/amend child
-  tasks, and PR review evidence bound to the verified task HEAD.
+- **APP3:** persistent resumable task evidence, exact commit/diff binding and exact-SHA CI/validator review;
+- **APP4:** bounded exact diff review, human review acknowledgement, immutable retry/amend child tasks and exact PR binding;
+- **APP5:** real project-specific exact-HEAD validators plus bounded PR review/thread/conversation evidence.
 
-Package version: `0.28.0`.
+Package version: `0.29.0`.
 
 ## Run read / preview / review mode
 
@@ -25,19 +24,20 @@ st-music-agent app
 
 Open `http://127.0.0.1:8765`.
 
-This mode reads the four ST project evidence surfaces, builds a fresh verified portfolio plan,
-previews engineering tasks, restores persisted task evidence, and can inspect exact APP4 diff review
-bundles. It cannot execute model writes unless `--enable-writes` is supplied.
+This mode reads the four ST project evidence surfaces, builds a verified portfolio plan, previews
+engineering tasks, restores persisted task evidence, inspects exact APP4 diff review bundles and shows
+APP5 project-validation / PR-collaboration evidence. It cannot execute model writes unless
+`--enable-writes` is supplied.
 
-By default APP3/APP4 stores structured task evidence at:
+Task evidence is stored by default at:
 
 ```text
 ~/.st-music-agent/task-events.jsonl
 ```
 
-Override with `--task-state-file PATH` or `ST_MUSIC_AGENT_TASK_STATE`. The journal stores bounded
-public task/review evidence only; it does not store provider chain-of-thought, API keys, raw
-credentials, or secret payloads.
+Override with `--task-state-file PATH` or `ST_MUSIC_AGENT_TASK_STATE`. The append-only SHA-256
+hash-chained journal stores bounded public task/review evidence only; it does not store provider
+chain-of-thought, API keys, raw credentials or secret payloads.
 
 ## Run guarded feature-branch tasks
 
@@ -52,38 +52,57 @@ st-music-agent app \
 
 Write mode is accepted only on a loopback host. Credential values remain inside trusted adapters.
 
-The current APP4 flow is:
+The current APP5 flow is:
 
 ```text
 instruction
-  -> exact repo/base SHA preview + deterministic feature branch
-  -> append-only PREVIEWED evidence
+  -> exact repository/base SHA preview + deterministic feature branch
   -> explicit Run click
   -> bounded feature-branch agent execution
-  -> exact final HEAD + bounded base...HEAD change evidence
-  -> exact-SHA CI + typed validators
-  -> VERIFIED_SUCCESS
-  -> bounded exact patch review for the same base/head
-  -> review_digest from commit identity + per-file patch digests
-  -> explicit human acknowledgement of that exact review
-  -> explicit human Open PR click
-  -> PR head/base read-back + PR_REVIEW_SNAPSHOT
+  -> exact final HEAD + bounded base...HEAD evidence
+  -> exact-SHA CI
+  -> generic validators
+  -> project-specific authoritative evidence adapter at the exact task HEAD
+  -> VERIFIED_SUCCESS only when required evidence passes
+  -> bounded exact diff review + review_digest
+  -> explicit human review acknowledgement
+  -> explicit human PR creation
+  -> exact PR head/base evidence
+  -> optional bounded PR review/thread/conversation refresh
   -> merge remains unavailable
 ```
 
-If any patch is unavailable or truncated by APP4 review limits, review is incomplete and cannot be
-acknowledged. CI success and review acknowledgement are engineering evidence only; neither is musical
-correctness, release readiness or production authorization.
+## Project-specific APP5 validators
+
+APP5 does not relabel generic CI as domain correctness. It reuses the existing authoritative project
+evidence adapters at the exact task commit:
+
+- **Score Restore:** current-truth contract and safety claims such as no automatic production promotion and no implied OMR/musical truth;
+- **MusicXML → Guitar TAB:** capability-driven `REVIEW_REQUIRED`, PASS-only canonical/export boundaries and approximate playback contract;
+- **Score Editor:** repository-reality contract with release/cutover gates still separate from feature development;
+- **Real-Time Score Following:** permanent research evidence with production/pedagogical authority and acoustic mono-mixture claims kept closed.
+
+A malformed project contract is `FAIL`. Evidence that cannot be read is `UNAVAILABLE`; it never
+silently becomes `PASS`.
+
+## PR collaboration evidence
+
+After a PR is opened, APP5 can explicitly refresh bounded review collaboration evidence:
+
+- review submissions and their commit IDs;
+- exact-HEAD approvals / change requests;
+- stale reviews belonging to another commit;
+- inline review-comment threads;
+- general PR conversation comments.
+
+GitHub REST does not expose thread-resolution state in this adapter, so resolution remains explicitly
+`unavailable` rather than being inferred. PR collaboration evidence is append-only and is never merge
+authority.
 
 ## Retry and amend
 
-APP4 never rewrites a failed or completed parent task. A retry/amend creates a separate child task:
-
-- `retry` is for a `FAILED` parent;
-- `amend` requires exact parent commit evidence;
-- parent stage/outcome/evidence remains immutable;
-- child receives a new task id and a new bounded feature branch through the existing APP3 path;
-- parent/child lineage is appended to the same hash-chained journal.
+APP4/APP5 never rewrite a failed or completed parent task. `retry` and `amend` create separate child
+tasks with parent/child lineage in the same journal.
 
 ## Persistent task lifecycle
 
@@ -100,24 +119,25 @@ PREVIEWED
   -> PR_OPENED
 ```
 
-A task can transition to terminal `FAILED`; it is not rewritten in place. Public outcomes are
-`WORKING`, `REVIEW_REQUIRED`, `VERIFIED_SUCCESS`, and `FAILED`.
+A task may terminate as `FAILED`. Public outcomes remain `WORKING`, `REVIEW_REQUIRED`,
+`VERIFIED_SUCCESS`, and `FAILED`.
 
-APP4 adds evidence events without widening the stage machine:
+Additional append-only review events now include:
 
 ```text
 REVIEW_SNAPSHOT
 REVIEW_ACKNOWLEDGED
 LINEAGE_PARENT / LINEAGE_CHILD_CREATED
 PR_REVIEW_SNAPSHOT
+PR_COLLABORATION_SNAPSHOT
 ```
 
 ## Core safety model
 
-Read-only work may run autonomously. Reversible feature-branch writes may run when deterministic
-policy says `AUTO_EXECUTE`. Protected/destructive/external actions remain host or human gated.
+Read-only work may run autonomously. Reversible feature-branch writes may run only when deterministic
+policy allows them. Protected/destructive/external actions remain host or human gated.
 
-The application has no endpoint or model tool for:
+The application exposes no model tool or HTTP endpoint for:
 
 - merge or auto-merge;
 - direct `main` / `master` writes;
@@ -126,26 +146,14 @@ The application has no endpoint or model tool for:
 - model training or production activation;
 - canonicalization or rollback execution.
 
-The model cannot choose the writable branch and cannot open a PR itself.
-
-## Music-domain evidence
-
-The operator console reads bounded snapshots from:
-
-- Score Restore;
-- MusicXML → Guitar TAB;
-- Score Editor;
-- Real-Time Score Following.
-
-`REVIEW_REQUIRED` remains localized and must not become a global lock when a safe readable/reviewable
-artifact can still be shown.
+The model cannot choose the writable branch, approve a PR, or merge it.
 
 ## Model lifecycle
 
-The existing A1-A26 core remains authoritative for evidence, planning, execution records, curated
-data, training lineage, model candidates, activation, canonicalization, baseline stability, drift,
-rollback review, rollback receipts and post-rollback recovery. APP1-APP4 sit above that core without
-replacing its policy or approval boundaries.
+The A1-A26 core remains authoritative for evidence, planning, execution records, curated data,
+training lineage, model candidates, activation, canonicalization, baseline stability, drift, rollback
+review, rollback receipts and post-rollback recovery. APP1-APP5 sit above that core without replacing
+its policy or approval boundaries.
 
 ## Development
 
@@ -161,6 +169,7 @@ See:
 - [`docs/operator-console.md`](docs/operator-console.md)
 - [`docs/app3-execution-evidence.md`](docs/app3-execution-evidence.md)
 - [`docs/app4-review-and-revision.md`](docs/app4-review-and-revision.md)
+- [`docs/app5-project-validation-and-pr-collaboration.md`](docs/app5-project-validation-and-pr-collaboration.md)
 - [`docs/music-domain-evidence.md`](docs/music-domain-evidence.md)
 - [`docs/planning-and-learning.md`](docs/planning-and-learning.md)
 - [`docs/learning-evaluation.md`](docs/learning-evaluation.md)
