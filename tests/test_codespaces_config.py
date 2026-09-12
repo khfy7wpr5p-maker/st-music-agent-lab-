@@ -1,5 +1,5 @@
 import json
-from pathlib import Path
+import pathlib
 
 
 EXPECTED_REPOSITORIES = {
@@ -35,7 +35,7 @@ EXPECTED_REPOSITORIES = {
 
 
 def test_codespaces_cross_repo_permissions_are_explicit_and_bounded() -> None:
-    config_path = Path(__file__).parents[1] / ".devcontainer" / "devcontainer.json"
+    config_path = pathlib.Path(__file__).parents[1] / ".devcontainer" / "devcontainer.json"
     config = json.loads(config_path.read_text(encoding="utf-8"))
 
     repositories = config["customizations"]["codespaces"]["repositories"]
