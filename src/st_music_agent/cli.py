@@ -5,9 +5,9 @@ import json
 import sys
 from collections.abc import Sequence
 
-from .app8_web_app import serve_operator_console
 from .catalog import DEFAULT_MODELS
 from .contracts import AgentTask, ModelProfile, TaskKind
+from .deterministic_app8_web_app import serve_operator_console
 from .execution import DirectAgentRunner
 from .providers import OpenAICompatibleClient, OpenAICompatibleConfig
 from .router import ModelRouter
