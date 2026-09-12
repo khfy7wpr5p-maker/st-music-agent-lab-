@@ -79,16 +79,18 @@ Source: `ROADMAP.md`
 The roadmap explicitly defines repository reality as the current source of truth. A13 preserves
 these boundaries:
 
-- APP-11F is complete/merged in repository reality;
+- APP-11F is complete/merged in the declared roadmap source;
 - the current phase is strong-editor semantic selection, relation authoring and timing-space
   expansion;
 - manual real-device/browser validation remains required;
 - the standalone release gate remains closed;
 - SesliTab V4 cutover remains unauthorized;
 - feature development must not silently open release/cutover gates;
-- APP-11G Tuplet Retiming Admission Foundation is the next declared development action.
+- APP-11G Tuplet Retiming Admission Foundation remains the roadmap-declared next action.
 
-Planned capability is never reported as production capability.
+Planned capability is never reported as production capability. If implementation commits advance
+faster than `ROADMAP.md`, the adapter continues to report the roadmap truth rather than silently
+inferring a newer release/product state from unrelated files.
 
 ## A13 — Real-Time Score Following
 
@@ -99,24 +101,27 @@ Repository: `khfy7wpr5p-maker/st-real-time-score-following-lab`
 Sources:
 
 - `README.md`
-- `benchmarks/reports/SF11_MIXED_ENSEMBLE.md`
+- `benchmarks/reports/SF12_ORCHESTRA_GLOBAL.md`
 
 A13 reports the current research boundary without overstating it:
 
-- SF-11 Mixed Ensemble is complete for repository-owned deterministic channel-separated evidence;
-- SF-12 Orchestra Global Score Following is the next research stage;
-- SF-11 permanent evidence records a validated implementation head and passing CI run;
-- the evidence is synthetic/channel-separated and is not acoustic mono-mixture authority;
-- shared confidence remains unavailable rather than synthesized;
+- SF-12 Orchestra Global Score Following is complete for repository-owned deterministic global
+  measure/beat structural evidence;
+- SF-13 Orchestra Section Research is the next autonomous research stage;
+- SF-12 permanent evidence records an implementation head and implementation CI run;
+- the SF-12 follower is aggregate-texture global measure/beat research only;
+- it does not establish per-instrument/section transcription or acoustic source separation;
+- real orchestral-audio robustness remains dataset/license-gated;
+- calibrated global confidence remains unavailable rather than synthesized;
 - SF-04 real violin evidence remains a separate rights-gated path;
 - experimental evidence is not production or pedagogical authority.
 
-Asynchrony, divergence, quorum loss and abstention remain evidence states rather than student or
-performer quality grades.
+The adapter preserves compatibility with the APP5 safety invariant
+`acoustic_mono_mixture_authority == false`; SF-12 does not widen that authority.
 
 ## Composition
 
-`build_default_music_domain_toolset()` now binds four read-only repositories and returns a
+`build_default_music_domain_toolset()` binds four read-only repositories and returns a
 `FullMusicDomainToolset`. Registering it into the normal `ToolRegistry` exposes exactly:
 
 - `music.score_restore.snapshot`
@@ -137,14 +142,24 @@ OpenHands -> restricted ST MCP bridge -> ToolRegistry -> music.* snapshot
 No music-domain write, training, release activation, product cutover, canonical export or
 production-promotion capability is introduced by A12-A13.
 
+## Operational freshness
+
+Project evidence adapters are intentionally strict. If an upstream repository advances and its
+repository-owned evidence wording/path changes, a validator may become `UNAVAILABLE`/FAIL until the
+adapter contract is updated and tested against the new evidence. That is preferable to presenting a
+stale or inferred project state as current truth.
+
+The APP8 operational pilot uses this failure mode as a diagnostic signal: evidence-contract drift is
+an operator-maintenance issue, not permission to bypass the validator.
+
 ## Next safe expansion
 
-A14 should consume these snapshots without bypassing them. Suitable work:
+A14 and later application layers may consume these snapshots without bypassing them. Suitable work
+remains:
 
-1. add a cross-project planner that produces recommendations/evidence dependencies but does not
-   mutate source projects;
-2. add synthetic/local GitHub integration fixtures for all four evidence adapters;
-3. add resumable orchestration state tied to journal/budget/approval evidence;
+1. keep cross-project planning tied to exact repository/evidence identities;
+2. keep synthetic/local fixtures synchronized with repository-owned evidence contracts;
+3. keep resumable orchestration state tied to journal/budget/approval evidence;
 4. define music-domain mutation contracts only after read/evidence semantics remain stable;
 5. keep training/promotion, release/cutover and canonical student-facing export behind dedicated
    human-gated policies.
