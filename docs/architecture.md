@@ -1,6 +1,6 @@
 # ST Music Agent Lab — Architecture Map
 
-Status: A1-A26 guarded core + APP1-APP5 runnable guarded application
+Status: A1-A26 guarded core + APP1-APP6 runnable guarded application
 Date: 2026-09-12
 
 ## Purpose
@@ -8,7 +8,7 @@ Date: 2026-09-12
 ST Music Agent Lab is the model-agnostic engineering and music-intelligence control layer for ST
 projects. The A1-A26 core owns policy, tools, budgets, approvals, evidence, verification, learning,
 training/model lifecycle, canonical-baseline history, drift and rollback-recovery boundaries.
-APP1-APP5 provide the runnable operator application above those boundaries.
+APP1-APP6 provide the runnable operator application above those boundaries.
 
 ## Core map
 
@@ -17,16 +17,20 @@ ST music repositories
   -> source-provenanced evidence
   -> deterministic planner
   -> independent verifier
-  -> guarded reversible execution
+  -> guarded reversible feature-branch execution
   -> persistent exact task evidence
   -> exact-SHA CI
-  -> generic + project-specific typed validators
+  -> generic + project-specific validators
+  -> validator health/freshness
   -> VERIFIED_SUCCESS
   -> bounded exact diff review
   -> human review acknowledgement bound to review_digest + HEAD
+  -> fresh-health gate before PR opening
   -> human-gated PR creation
   -> exact PR head/base evidence
-  -> bounded PR review/thread/conversation evidence
+  -> bounded PR collaboration evidence
+  -> trustworthy GraphQL thread resolution when available
+  -> bounded audit JSON + journal anchor hash
   -> curated data / training contract
   -> immutable model candidate
   -> paired benchmark + promotion review
@@ -44,18 +48,18 @@ Critical production actions never become model self-authority.
 
 ## APP1 — Operator Console
 
-APP1 provides project evidence, warnings, next-safe-boundaries and verified portfolio planning across
-Score Restore, MusicXML → Guitar TAB, Score Editor and Real-Time Score Following.
+APP1 provides project evidence, warnings, next-safe-boundaries and independently verified portfolio
+planning across Score Restore, MusicXML → Guitar TAB, Score Editor and Real-Time Score Following.
 
 ## APP2 — Guarded task execution
 
-APP2 introduced opt-in loopback-only feature-branch execution. The model receives bounded reads and one
-host-bound `task.write_file` mutation. It cannot select `main`, create/approve/merge a PR, deploy,
-train, canonicalize or execute rollback.
+APP2 introduced opt-in loopback-only feature-branch execution. The model receives bounded repository
+reads and one host-bound `task.write_file` mutation. It cannot select `main`, create/approve/merge a
+PR, deploy, train, canonicalize or execute rollback.
 
 ## APP3 — Persistent execution evidence + CI/validators
 
-APP3 adds the append-only SHA-256 task journal, exact final task HEAD, bounded base...HEAD evidence,
+APP3 adds an append-only SHA-256 journal, exact final task HEAD, bounded base...HEAD evidence,
 exact-SHA CI selection and typed `PASS / FAIL / UNAVAILABLE` validators.
 
 Primary task stages remain:
@@ -73,82 +77,83 @@ PREVIEWED
   -> PR_OPENED
 ```
 
-`FAILED` is terminal for a task identity. No model message such as "done" is treated as success.
+`FAILED` is terminal for a task identity. A model message such as "done" is never proof of success.
 
 ## APP4 — Exact review + immutable revisions + PR binding
 
-APP4 binds a bounded exact patch review to the task base/head pair, computes per-file patch digests and
-a deterministic `review_digest`, requires explicit human acknowledgement, then allows a separate human
-PR-open action. Missing/truncated patch evidence cannot be acknowledged.
-
-Retry/amend does not rewrite history: it creates a new child task with append-only lineage evidence.
-APP4 also persists `PR_REVIEW_SNAPSHOT` for exact PR head/base binding.
+APP4 binds bounded patch review to the exact task base/head, computes per-file digests and a
+`review_digest`, requires explicit human acknowledgement and only then allows a separate human PR-open
+action. Missing/truncated patch evidence cannot be acknowledged. Retry/amend creates a new child task
+rather than rewriting the parent.
 
 ## APP5 — Project validation + PR collaboration evidence
 
-APP5 turns the generic validator plane into real project-aware validation without confusing CI with
-music-domain correctness.
-
-For every new APP5 task, the authoritative evidence adapter for that project is re-run using the exact
-task HEAD as its Git ref:
+APP5 runs the authoritative project adapter at the exact task HEAD:
 
 - Score Restore -> `score_restore_current_truth`;
 - MusicXML → Guitar TAB -> `tab_capability_contract`;
 - Score Editor -> `score_editor_release_boundary`;
 - Real-Time Score Following -> `score_following_research_boundary`.
 
-Each adapter must return evidence sources for the exact task HEAD. Contract violations are `FAIL`;
-unreadable evidence remains `UNAVAILABLE`, never `PASS`.
+Unreadable evidence remains `UNAVAILABLE`; contract violations are `FAIL`. PR collaboration refreshes
+bounded review submissions, inline comments and conversation metadata while keeping merge authority
+false. Raw PR comment bodies are not persisted; only body hashes/lengths are retained.
 
-### Project invariants
+## APP6 — Validator health + trusted resolution + audit export
 
-APP5 preserves project-specific safety boundaries rather than inventing one global music validator.
-Examples include:
+APP6 hardens operational use of APP5 evidence.
 
-- Score Restore: no automatic production promotion; OMR/musical truth not implied;
-- TAB: `REVIEW_REQUIRED` remains capability-driven; canonical/export stays PASS-only;
-- Score Editor: planned capability remains distinct from production; release/cutover gates stay closed
-  unless separately authorized;
-- Score Following: research evidence is not production/pedagogical authority and does not imply
-  acoustic mono-mixture authority.
+### Validator freshness
 
-### PR collaboration evidence
-
-After PR creation, an explicit session-token-protected refresh reads bounded review collaboration
-information. APP5 separates reviews for the exact task HEAD from stale reviews for older commits and
-stores review submissions, inline comment threads and general PR conversation evidence.
-
-GitHub REST does not expose review-thread resolution state in this runtime adapter. APP5 records that
-state as `unavailable` rather than inferring it.
-
-The append-only event is:
+Each explicit evidence refresh creates `VALIDATOR_HEALTH_SNAPSHOT`, bound to the exact validator event
+sequence/hash. Current freshness is 900 seconds.
 
 ```text
-PR_COLLABORATION_SNAPSHOT
+all PASS + exact HEAD -> HEALTHY
+UNAVAILABLE/incomplete -> DEGRADED
+FAIL/wrong commit -> UNHEALTHY
 ```
 
-It always contains `merge_authorized: false`.
+At read time the snapshot becomes `FRESH_*` or `STALE_*`. Expiry never rewrites historical
+`VERIFIED_SUCCESS`, but a new PR-open action requires `FRESH_HEALTHY` evidence and therefore fails
+closed when validation is stale.
 
-## Persistent evidence events
+### Review-thread resolution
 
-The APP3 stage machine is unchanged. Additional review/evidence events include:
+For `api.github.com`, APP6 uses GitHub GraphQL `PullRequest.reviewThreads.isResolved` as the trusted
+resolution source. The adapter is bounded to 100 threads and 20 comments per thread. Unsupported,
+failed or truncated GraphQL evidence stays explicitly unavailable; resolution is never inferred from
+comment text.
+
+The application still cannot resolve/unresolve/dismiss a thread or approve a PR.
+
+### Audit export
+
+APP6 exposes a read-only task audit projection at:
 
 ```text
-REVIEW_SNAPSHOT
-REVIEW_ACKNOWLEDGED
-LINEAGE_PARENT
-LINEAGE_CHILD_CREATED
-PR_REVIEW_SNAPSHOT
-PR_COLLABORATION_SNAPSHOT
+GET /api/tasks/audit/<task_id>
 ```
+
+The bundle contains exact repo/commit identity, CI, validators, health, review digests, PR binding,
+collaboration summary, lineage, bounded journal event headers, journal anchor sequence/hash and an
+`audit_sha256`. Provider chain-of-thought, credentials and raw PR comment bodies are excluded.
+
+### APP6 evidence event
+
+```text
+VALIDATOR_HEALTH_SNAPSHOT
+```
+
+APP6 does not add or skip task stages.
 
 ## Branch and HTTP confinement retained
 
-The model still has no branch field on `task.write_file`, no PR-open tool, no PR approval tool and no
-merge tool. Task POSTs require a random per-process `X-ST-Session` token. Write mode is loopback-only.
-Credentials are resolved only inside trusted adapters.
+The model has no branch argument on `task.write_file`, no PR-open tool, no PR approval tool, no thread
+resolution tool and no merge tool. Task mutations require a per-process `X-ST-Session` token. Write
+mode is loopback-only. Credentials are resolved only inside trusted adapters.
 
-## Explicitly unavailable in APP5
+## Explicitly unavailable in APP6
 
 - direct `main` / `master` mutation;
 - arbitrary branch selection by the model;
@@ -171,13 +176,13 @@ Credentials are resolved only inside trusted adapters.
 6. Plans and lifecycle widening are independently recomputed from evidence.
 7. Training, activation, canonicalization and rollback remain separate host-authorized boundaries.
 8. Baseline history is append-only; failed generations are retained.
-9. Engineering success/review metadata is not production authority or domain correctness.
+9. Engineering success/review/audit metadata is not production authority or domain correctness.
 10. Exact commit identity is required wherever CI/validator/review evidence widens task state.
-11. Earlier task, revision and collaboration evidence is append-only and cannot be silently replaced.
+11. Earlier task, revision, collaboration and health evidence cannot be silently replaced.
 12. Tests define widened application behavior before merge.
 
-## Next application boundary — APP6
+## Next application boundary — APP7
 
-APP6 should focus on operational hardening of validator health/freshness, richer review-resolution
-adapters where trustworthy APIs are available, and audit/export ergonomics. Merge and production
-authority must remain outside the agent application.
+A later APP7 should be justified by daily operator needs. Likely candidates are deterministic audit
+verification/replay and a separately threat-modeled authenticated remote operator mode. Neither should
+implicitly add merge or production authority.

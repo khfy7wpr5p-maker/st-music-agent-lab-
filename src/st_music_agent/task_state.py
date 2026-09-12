@@ -121,7 +121,7 @@ _ALLOWED_STAGE_TRANSITIONS: dict[TaskStage, frozenset[TaskStage]] = {
 
 
 class TaskEventStore:
-    """Small append-only, hash-chained APP3/APP4/APP5 task evidence journal."""
+    """Small append-only, hash-chained APP3-APP6 task evidence journal."""
 
     def __init__(self, path: str | Path) -> None:
         self.path = Path(path).expanduser()
@@ -190,6 +190,7 @@ class TaskEventStore:
             "commit": None,
             "ci": None,
             "validators": [],
+            "validator_health": None,
             "pull_request": None,
             "review": None,
             "review_ack": None,
@@ -214,6 +215,8 @@ class TaskEventStore:
                 view["ci"] = payload
             elif event == "VALIDATOR_SNAPSHOT":
                 view["validators"] = list(payload.get("results", []))
+            elif event == "VALIDATOR_HEALTH_SNAPSHOT":
+                view["validator_health"] = payload
             elif event == "OUTCOME":
                 view["outcome"] = payload.get("outcome", view["outcome"])
             elif event == "REVIEW_SNAPSHOT":

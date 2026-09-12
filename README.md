@@ -11,11 +11,12 @@ The repository contains the A1-A26 guarded model lifecycle plus the runnable app
 - **APP2:** opt-in, loopback-only guarded engineering tasks on a host-bound feature branch;
 - **APP3:** persistent resumable task evidence, exact commit/diff binding and exact-SHA CI/validator review;
 - **APP4:** bounded exact diff review, human review acknowledgement, immutable retry/amend child tasks and exact PR binding;
-- **APP5:** real project-specific exact-HEAD validators plus bounded PR review/thread/conversation evidence.
+- **APP5:** real project-specific exact-HEAD validators plus bounded PR review/thread/conversation evidence;
+- **APP6:** validator health/freshness, trustworthy GitHub review-thread resolution when available, and bounded audit JSON export.
 
-Package version: `0.29.0`.
+Package version: `0.30.0`.
 
-## Run read / preview / review mode
+## Run read / preview / review / audit mode
 
 ```bash
 python -m pip install -e '.[dev]'
@@ -25,8 +26,8 @@ st-music-agent app
 Open `http://127.0.0.1:8765`.
 
 This mode reads the four ST project evidence surfaces, builds a verified portfolio plan, previews
-engineering tasks, restores persisted task evidence, inspects exact APP4 diff review bundles and shows
-APP5 project-validation / PR-collaboration evidence. It cannot execute model writes unless
+engineering tasks, restores persisted evidence, inspects exact diff/review evidence, displays validator
+health and can export a bounded task audit bundle. It cannot execute model writes unless
 `--enable-writes` is supplied.
 
 Task evidence is stored by default at:
@@ -52,7 +53,7 @@ st-music-agent app \
 
 Write mode is accepted only on a loopback host. Credential values remain inside trusted adapters.
 
-The current APP5 flow is:
+The current APP6 flow is:
 
 ```text
 instruction
@@ -61,48 +62,52 @@ instruction
   -> bounded feature-branch agent execution
   -> exact final HEAD + bounded base...HEAD evidence
   -> exact-SHA CI
-  -> generic validators
-  -> project-specific authoritative evidence adapter at the exact task HEAD
-  -> VERIFIED_SUCCESS only when required evidence passes
-  -> bounded exact diff review + review_digest
-  -> explicit human review acknowledgement
+  -> generic + project-specific exact-HEAD validators
+  -> validator health snapshot with freshness expiry
+  -> VERIFIED_SUCCESS
+  -> bounded exact diff review + human acknowledgement
+  -> fresh healthy validator evidence required before PR opening
   -> explicit human PR creation
   -> exact PR head/base evidence
   -> optional bounded PR review/thread/conversation refresh
+  -> GitHub GraphQL resolved/unresolved evidence when trustworthy API access is available
+  -> bounded audit JSON export with journal anchor hash
   -> merge remains unavailable
 ```
 
-## Project-specific APP5 validators
+## Validator health and freshness
 
-APP5 does not relabel generic CI as domain correctness. It reuses the existing authoritative project
-evidence adapters at the exact task commit:
+APP6 records a `VALIDATOR_HEALTH_SNAPSHOT` from the latest exact validator snapshot. The current
+freshness window is 15 minutes. `VERIFIED_SUCCESS` remains part of immutable history when the window
+expires, but a new PR-opening action requires `FRESH_HEALTHY` evidence. A stale, failed, mismatched or
+unavailable validator surface requires an explicit evidence refresh.
 
-- **Score Restore:** current-truth contract and safety claims such as no automatic production promotion and no implied OMR/musical truth;
-- **MusicXML → Guitar TAB:** capability-driven `REVIEW_REQUIRED`, PASS-only canonical/export boundaries and approximate playback contract;
-- **Score Editor:** repository-reality contract with release/cutover gates still separate from feature development;
-- **Real-Time Score Following:** permanent research evidence with production/pedagogical authority and acoustic mono-mixture claims kept closed.
+## Project-specific validators
 
-A malformed project contract is `FAIL`. Evidence that cannot be read is `UNAVAILABLE`; it never
-silently becomes `PASS`.
+APP6 retains the APP5 project-aware validators at the exact task commit:
 
-## PR collaboration evidence
+- **Score Restore:** current-truth contract and safety claims;
+- **MusicXML → Guitar TAB:** capability-driven `REVIEW_REQUIRED` and PASS-only canonical/export boundaries;
+- **Score Editor:** repository-reality contract with release/cutover gates separate;
+- **Real-Time Score Following:** research evidence with production/pedagogical authority kept closed.
 
-After a PR is opened, APP5 can explicitly refresh bounded review collaboration evidence:
+Unreadable evidence remains `UNAVAILABLE`, not `PASS`.
 
-- review submissions and their commit IDs;
-- exact-HEAD approvals / change requests;
-- stale reviews belonging to another commit;
-- inline review-comment threads;
-- general PR conversation comments.
+## PR collaboration and resolution evidence
 
-GitHub REST does not expose thread-resolution state in this adapter, so resolution remains explicitly
-`unavailable` rather than being inferred. PR collaboration evidence is append-only and is never merge
-authority.
+APP6 retains bounded APP5 review/comment evidence and, for `api.github.com`, uses GitHub GraphQL
+`reviewThreads.isResolved` as the authoritative source for resolved/unresolved thread state. If GraphQL
+is unavailable, errors, or exceeds the configured bound, resolution remains explicitly unavailable;
+APP6 never infers resolution from comment text.
 
-## Retry and amend
+Review metadata never authorizes merge.
 
-APP4/APP5 never rewrite a failed or completed parent task. `retry` and `amend` create separate child
-tasks with parent/child lineage in the same journal.
+## Audit export
+
+`GET /api/tasks/audit/<task_id>` returns a bounded derived JSON bundle containing exact repository/
+commit identity, CI, validators, freshness state, review digests, PR metadata, collaboration summary,
+lineage, journal sequence/hash anchors and an `audit_sha256` digest. It excludes raw provider reasoning,
+credentials and raw PR comment bodies.
 
 ## Persistent task lifecycle
 
@@ -119,41 +124,23 @@ PREVIEWED
   -> PR_OPENED
 ```
 
-A task may terminate as `FAILED`. Public outcomes remain `WORKING`, `REVIEW_REQUIRED`,
-`VERIFIED_SUCCESS`, and `FAILED`.
-
-Additional append-only review events now include:
+APP6 adds evidence without widening the stage machine:
 
 ```text
-REVIEW_SNAPSHOT
-REVIEW_ACKNOWLEDGED
-LINEAGE_PARENT / LINEAGE_CHILD_CREATED
-PR_REVIEW_SNAPSHOT
-PR_COLLABORATION_SNAPSHOT
+VALIDATOR_HEALTH_SNAPSHOT
 ```
+
+Existing review/lineage/collaboration evidence remains append-only.
 
 ## Core safety model
 
-Read-only work may run autonomously. Reversible feature-branch writes may run only when deterministic
-policy allows them. Protected/destructive/external actions remain host or human gated.
+The application exposes no model tool or HTTP endpoint for merge or auto-merge, direct `main` /
+`master` writes, file deletion, deployment/release, model training/production activation,
+canonicalization or rollback execution. The model cannot choose the writable branch, approve a PR,
+resolve a review thread, or merge it.
 
-The application exposes no model tool or HTTP endpoint for:
-
-- merge or auto-merge;
-- direct `main` / `master` writes;
-- file deletion;
-- deployment/release;
-- model training or production activation;
-- canonicalization or rollback execution.
-
-The model cannot choose the writable branch, approve a PR, or merge it.
-
-## Model lifecycle
-
-The A1-A26 core remains authoritative for evidence, planning, execution records, curated data,
-training lineage, model candidates, activation, canonicalization, baseline stability, drift, rollback
-review, rollback receipts and post-rollback recovery. APP1-APP5 sit above that core without replacing
-its policy or approval boundaries.
+The A1-A26 core remains authoritative for lifecycle and production boundaries. APP1-APP6 sit above
+that core without replacing its policy or approval model.
 
 ## Development
 
@@ -170,6 +157,7 @@ See:
 - [`docs/app3-execution-evidence.md`](docs/app3-execution-evidence.md)
 - [`docs/app4-review-and-revision.md`](docs/app4-review-and-revision.md)
 - [`docs/app5-project-validation-and-pr-collaboration.md`](docs/app5-project-validation-and-pr-collaboration.md)
+- [`docs/app6-health-resolution-audit.md`](docs/app6-health-resolution-audit.md)
 - [`docs/music-domain-evidence.md`](docs/music-domain-evidence.md)
 - [`docs/planning-and-learning.md`](docs/planning-and-learning.md)
 - [`docs/learning-evaluation.md`](docs/learning-evaluation.md)
