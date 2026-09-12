@@ -4,7 +4,6 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
-from .app5_task_execution import App5TaskService
 from .app5_web_app import _APP5_HTML, App5OperatorConsoleApplication
 from .app6_task_execution import App6TaskService
 from .operator_console import OperatorConsoleService
