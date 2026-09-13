@@ -9,11 +9,144 @@ from .compact_planner import CompactSmallModelPlanner
 from .deterministic_executor import DeterministicExecutionError, DeterministicExecutor
 from .policy import AutonomyDecision
 from .task_execution import TaskExecutionError, TaskRunRecord, _require_action
-from .task_state import TaskStage
+from .task_state import TaskOutcome, TaskStage, ValidatorStatus
+from .tools import ActionApproval
 
 
 class _DeterministicRunMixin:
     """Replace the inherited model tool-loop with MODEL_PLANS_HOST_EXECUTES."""
+
+    def open_pull_request(self, task_id: str) -> Mapping[str, Any]:
+        """Open a human-approved validation PR when PR-triggered CI is the remaining gate.
+
+        The PR does not imply VERIFIED_SUCCESS and does not authorize merge. It exists only so
+        repositories whose workflows run on pull_request can produce exact-SHA CI evidence.
+        """
+        if not self.config.enabled:
+            raise TaskExecutionError("task execution is disabled")
+
+        view = self._persisted_view(task_id)
+        existing = view.get("pull_request")
+        if isinstance(existing, Mapping):
+            return dict(existing)
+
+        if view.get("outcome") == TaskOutcome.VERIFIED_SUCCESS.value:
+            return super().open_pull_request(task_id)
+
+        if view.get("stage") != TaskStage.CI_PENDING.value:
+            raise TaskExecutionError(
+                "task must be CI_PENDING or VERIFIED_SUCCESS before opening a pull request"
+            )
+
+        refreshed = self.refresh_evidence(task_id)
+        if refreshed.get("stage") == TaskStage.FAILED.value:
+            raise TaskExecutionError("task failed while refreshing validation evidence")
+        if refreshed.get("outcome") == TaskOutcome.VERIFIED_SUCCESS.value:
+            return super().open_pull_request(task_id)
+
+        ci = refreshed.get("ci")
+        validators = refreshed.get("validators")
+        if not isinstance(ci, Mapping) or ci.get("state") != "pending":
+            raise TaskExecutionError(
+                "validation PR requires pending exact-SHA CI evidence"
+            )
+        if not isinstance(validators, list) or not validators:
+            raise TaskExecutionError("validation PR requires host validator evidence")
+        if any(
+            not isinstance(item, Mapping)
+            or item.get("status") != ValidatorStatus.PASS.value
+            for item in validators
+        ):
+            raise TaskExecutionError(
+                "validation PR requires all configured host validators to pass"
+            )
+
+        view = self._persisted_view(task_id)
+        preview = self._persistent_preview(view)
+        commit = view.get("commit")
+        if not isinstance(commit, Mapping):
+            raise TaskExecutionError("task is missing exact commit evidence")
+        head_sha = commit.get("head_sha")
+        if not _full_sha(head_sha):
+            raise TaskExecutionError("task head SHA is invalid")
+        assert isinstance(head_sha, str)
+
+        repository = str(preview["repository"])
+        feature_branch = str(preview["feature_branch"])
+        base_branch = str(preview["base_branch"])
+        read_client = self._read_factory(repository)
+        branch = read_client.branch_info(feature_branch)
+        if branch.get("commit_sha") != head_sha:
+            raise TaskExecutionError(
+                "task branch moved after commit binding; validation PR opening is rejected"
+            )
+
+        target = f"{feature_branch}->{base_branch}"
+        approval = ActionApproval(action_name="github.open_pull_request", target=target)
+        mutation = self._mutation_factory(repository)
+        result = mutation.open_pull_request(
+            title=f"ST Agent validation task {task_id[-12:]}",
+            head=feature_branch,
+            base=base_branch,
+            body=(
+                "Human-approved validation PR created by ST Music Agent.\n\n"
+                f"Task: `{task_id}`\n"
+                f"Base SHA at preview: `{preview['base_sha']}`\n"
+                f"Bound head SHA: `{head_sha}`\n\n"
+                "This PR exists to trigger exact-SHA pull-request CI. The task is not yet "
+                "VERIFIED_SUCCESS. Merge and production actions remain unauthorized until CI and "
+                "validators are reviewed."
+            ),
+            approval=approval,
+        )
+        _require_action(
+            result,
+            AutonomyDecision.REQUIRE_HUMAN,
+            "validation pull request did not execute",
+        )
+        if not isinstance(result.value, Mapping):
+            raise TaskExecutionError("validation pull request result is invalid")
+        number = result.value.get("number")
+        if not isinstance(number, int) or isinstance(number, bool):
+            raise TaskExecutionError("validation pull request does not expose a valid number")
+
+        metadata = dict(result.value)
+        pull_request_reader = getattr(read_client, "pull_request", None)
+        if callable(pull_request_reader):
+            pr = pull_request_reader(number)
+            if not isinstance(pr, Mapping):
+                raise TaskExecutionError("validation pull request read-back evidence is invalid")
+            if pr.get("head_ref") != feature_branch or pr.get("head_sha") != head_sha:
+                raise TaskExecutionError(
+                    "validation pull request head does not match the bound task HEAD"
+                )
+            if pr.get("base_ref") != base_branch:
+                raise TaskExecutionError(
+                    "validation pull request base does not match the intended task base"
+                )
+            metadata.update(
+                {
+                    "head_sha": pr.get("head_sha"),
+                    "base_sha": pr.get("base_sha"),
+                    "mergeable": pr.get("mergeable"),
+                    "draft": pr.get("draft"),
+                }
+            )
+
+        metadata.update(
+            {
+                "ci_status": "pending",
+                "validation_only": True,
+                "verification_status": "PENDING_CI",
+                "merge_authorized": False,
+                "production_actions_authorized": False,
+            }
+        )
+        # Record PR metadata without advancing the stage. TaskEventStore projects any PR_OPENED
+        # event into pull_request while the stage remains CI_PENDING, allowing CI refresh to proceed.
+        self.store.append_evidence(task_id, TaskStage.PR_OPENED.value, metadata)
+        self._pull_requests[task_id] = metadata
+        return metadata
 
     def run(self, task_id: str) -> TaskRunRecord:
         preview = self._preview(task_id)
