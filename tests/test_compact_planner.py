@@ -2,7 +2,14 @@ from __future__ import annotations
 
 import json
 
-from st_music_agent.compact_planner import CompactSmallModelPlanner, _compact_candidate_paths
+import pytest
+
+from st_music_agent.compact_planner import (
+    CompactSmallModelPlanner,
+    _compact_candidate_paths,
+    _normalize_compact_json_content,
+)
+from st_music_agent.deterministic_executor import PlanValidationError
 
 REPO = "owner/repo"
 BASE = "a" * 40
@@ -110,3 +117,59 @@ def test_compact_planner_keeps_two_tool_free_calls_with_small_selection_prompt()
     assert selection_payload["candidate_paths"][0] == "src/target.py"
     assert "candidate_files" not in selection_payload
     assert all(isinstance(path, str) for path in selection_payload["candidate_paths"])
+
+
+def test_compact_planner_accepts_single_json_markdown_wrapper_without_extra_model_calls() -> None:
+    read = LargeFakeRead()
+    plan = {
+        "repository": REPO,
+        "base_sha": BASE,
+        "feature_branch": BRANCH,
+        "changes": [
+            {
+                "path": "src/target.py",
+                "operation": "update",
+                "expected_blob_sha": BLOB,
+                "content": "VALUE = 'new'\n",
+                "commit_message": "Update target deterministically",
+            }
+        ],
+        "validation_targets": [],
+        "summary": "Update target",
+    }
+    provider = CapturingProvider(
+        [
+            {
+                "role": "assistant",
+                "content": "```json\n" + json.dumps({"read_paths": ["src/target.py"]}) + "\n```",
+            },
+            {
+                "role": "assistant",
+                "content": "```\n" + json.dumps(plan) + "\n```",
+            },
+        ]
+    )
+
+    result = CompactSmallModelPlanner(provider).build_plan(
+        repository=REPO,
+        base_sha=BASE,
+        feature_branch=BRANCH,
+        instruction="Update src/target.py safely",
+        read_client=read,
+    )
+
+    assert result.model_calls == 2
+    assert len(provider.calls) == 2
+    assert result.selected_paths == ("src/target.py",)
+    assert result.plan.changes[0].content == "VALUE = 'new'\n"
+
+
+def test_compact_json_normalization_never_extracts_json_from_commentary() -> None:
+    wrapped_with_commentary = 'Here is the JSON:\n```json\n{"read_paths":[]}\n```'
+
+    assert _normalize_compact_json_content(wrapped_with_commentary) == wrapped_with_commentary
+
+
+def test_compact_json_normalization_rejects_invalid_fenced_json() -> None:
+    with pytest.raises(PlanValidationError, match="not valid JSON"):
+        _normalize_compact_json_content("```json\n{not-json}\n```")
