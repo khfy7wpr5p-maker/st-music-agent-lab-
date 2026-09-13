@@ -160,6 +160,13 @@ def test_compact_planner_accepts_one_bounded_fenced_json_block_with_plain_commen
     assert _normalize_compact_json_content(wrapped) == payload
 
 
+def test_compact_planner_accepts_one_raw_json_object_with_plain_commentary() -> None:
+    payload = '{"read_paths":[]}'
+    wrapped = "Here is the JSON:\n" + payload + "\nDone."
+
+    assert _normalize_compact_json_content(wrapped) == payload
+
+
 def test_compact_planner_supplies_only_missing_non_authoritative_summary() -> None:
     read = LargeFakeRead()
     plan = _valid_plan()
@@ -201,6 +208,12 @@ def test_compact_json_normalization_never_discards_structural_commentary() -> No
 
 def test_compact_json_normalization_never_accepts_multiple_fenced_blocks() -> None:
     wrapped = '```json\n{"read_paths":[]}\n```\n```json\n{"read_paths":["x"]}\n```'
+
+    assert _normalize_compact_json_content(wrapped) == wrapped
+
+
+def test_compact_json_normalization_never_accepts_multiple_raw_json_objects() -> None:
+    wrapped = 'First:\n{"read_paths":[]}\nSecond:\n{"read_paths":["x"]}'
 
     assert _normalize_compact_json_content(wrapped) == wrapped
 
