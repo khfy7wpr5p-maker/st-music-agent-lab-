@@ -86,7 +86,7 @@ class _DeterministicRunMixin:
                 instruction=preview.instruction,
                 read_client=read_client,
             )
-        except (RuntimeError, TypeError, ValueError) as exc:
+        except Exception as exc:  # noqa: BLE001 - provider/transport failures must fail the task closed.
             message = f"deterministic planner failed: {_bounded_message(exc)}"
             self.store.append_evidence(task_id, "PLANNER_FAILURE", {"message": message[:500]})
             self._fail(task_id, message)
@@ -130,7 +130,7 @@ class _DeterministicRunMixin:
         executor = DeterministicExecutor(read_client, mutation)
         try:
             execution = executor.execute(plan)
-        except (DeterministicExecutionError, RuntimeError, TypeError, ValueError) as exc:
+        except Exception as exc:  # noqa: BLE001 - host adapter failures must fail the task closed.
             message = f"deterministic executor failed: {_bounded_message(exc)}"
             self._fail(task_id, message)
             raise TaskExecutionError(message) from exc
