@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -114,15 +115,22 @@ class StructuredCompactPlanner(CompactSmallModelPlanner):
         rendered_changes: list[dict[str, Any]] = []
         model_calls = 2
         for change in manifest["changes"]:
-            content_message = self._complete_content(
-                self._content_prompt(
-                    instruction=instruction,
-                    change=change,
-                    file_evidence=file_evidence,
-                )
+            content = _exact_create_content_contract(
+                instruction=instruction,
+                path=change["path"],
+                operation=change["operation"],
             )
-            model_calls += 1
-            content = _normalize_file_content(_message_content(content_message))
+            if content is None:
+                content_message = self._complete_content(
+                    self._content_prompt(
+                        instruction=instruction,
+                        change=change,
+                        file_evidence=file_evidence,
+                    )
+                )
+                model_calls += 1
+                content = _normalize_file_content(_message_content(content_message))
+            content = _enforce_final_newline_contract(instruction, content)
             if len(content) > self.max_content_chars_per_file:
                 raise PlanValidationError(
                     f"generated file content exceeds configured limit: {change['path']}"
@@ -265,3 +273,39 @@ def _normalize_file_content(content: str) -> str:
     if not opening.startswith("```") or opening.count("```") != 1:
         return content
     return "\n".join(lines[1:-1]) + ("\n" if content.endswith("\n") else "")
+
+
+def _exact_create_content_contract(*, instruction: str, path: str, operation: str) -> str | None:
+    """Return host-authoritative literal content for a narrow exact-create instruction."""
+
+    if operation != "create":
+        return None
+    pattern = re.compile(
+        rf"create exactly one new file\s+{re.escape(path)}\s+"
+        r"with exactly this content:[ \t]*(?P<content>.*?)\s+followed by one newline\.",
+        re.IGNORECASE | re.DOTALL,
+    )
+    match = pattern.search(instruction)
+    if match is None:
+        return None
+    return match.group("content") + "\n"
+
+
+def _enforce_final_newline_contract(instruction: str, content: str) -> str:
+    """Apply an explicit user-requested final newline without changing unrelated content."""
+
+    normalized = " ".join(instruction.casefold().split())
+    requires_newline = any(
+        phrase in normalized
+        for phrase in (
+            "followed by one newline",
+            "end with newline",
+            "end with a newline",
+            "ends with newline",
+            "ends with a newline",
+            "final newline",
+        )
+    )
+    if requires_newline and not content.endswith("\n"):
+        return content + "\n"
+    return content
