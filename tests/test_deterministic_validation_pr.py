@@ -167,8 +167,6 @@ class PlannerProvider:
 
     def __init__(self) -> None:
         self.calls = 0
-        self.repository = ""
-        self.feature_branch = ""
 
     def complete_with_tools(self, messages, tools):
         self.calls += 1
@@ -178,27 +176,25 @@ class PlannerProvider:
                 "role": "assistant",
                 "content": json.dumps({"read_paths": ["README.md"]}),
             }
-        return {
-            "role": "assistant",
-            "content": json.dumps(
-                {
-                    "repository": self.repository,
-                    "base_sha": "a" * 40,
-                    "feature_branch": self.feature_branch,
-                    "changes": [
-                        {
-                            "path": "README.md",
-                            "operation": "update",
-                            "expected_blob_sha": "c" * 40,
-                            "content": "after\n",
-                            "commit_message": "Update README deterministically",
-                        }
-                    ],
-                    "validation_targets": [],
-                    "summary": "Update README",
-                }
-            ),
-        }
+        if self.calls == 2:
+            return {
+                "role": "assistant",
+                "content": json.dumps(
+                    {
+                        "changes": [
+                            {
+                                "path": "README.md",
+                                "operation": "update",
+                                "expected_blob_sha": "c" * 40,
+                                "commit_message": "Update README deterministically",
+                            }
+                        ],
+                        "validation_targets": [],
+                        "summary": "Update README",
+                    }
+                ),
+            }
+        return {"role": "assistant", "content": "after\n"}
 
 
 def _service(tmp_path, state: RepoState, *, profiles=None):
@@ -223,8 +219,6 @@ def _service(tmp_path, state: RepoState, *, profiles=None):
 
 def _run_task(service, provider):
     preview = service.preview("score_restore", "Update README wording")
-    provider.repository = preview.repository
-    provider.feature_branch = preview.feature_branch
     service.run(preview.task_id)
     return preview
 
