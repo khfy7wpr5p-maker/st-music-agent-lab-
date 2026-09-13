@@ -111,17 +111,17 @@ def serve_operator_console(
 
 def _build_deterministic_app8_html() -> str:
     html = _APP8_HTML
-    old = '$("#openPr").disabled=s.outcome!=="VERIFIED_SUCCESS"||!!pr;'
+    old = '$("#openPr").disabled=s.outcome!=="VERIFIED_SUCCESS"||!s.review_ready_for_pr||!!pr;'
     new = (
         'const validationPrReady=s.stage==="CI_PENDING"&&ci.state==="pending"&&'
         'vals.length>0&&vals.every(v=>v.status==="PASS");'
-        '$("#openPr").disabled=!!pr||!(s.outcome==="VERIFIED_SUCCESS"||validationPrReady);'
+        '$("#openPr").disabled=!!pr||!((s.outcome==="VERIFIED_SUCCESS"&&s.review_ready_for_pr)||validationPrReady);'
         '$("#openPr").textContent=validationPrReady?'
         '"Doğrulama PR aç — insan işlemi":"PR aç — insan işlemi";'
     )
     if old not in html:
         raise RuntimeError("APP8 HTML PR gate marker is missing")
-    return html.replace(old, new)
+    return html.replace(old, new, 1)
 
 
 _DETERMINISTIC_APP8_HTML = _build_deterministic_app8_html()
