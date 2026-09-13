@@ -2,16 +2,38 @@ from __future__ import annotations
 
 import hashlib
 import os
+from collections.abc import Mapping
 from http.server import ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from .app7_web_app import _LOOPBACK_HOSTS, _MIN_REMOTE_TOKEN_CHARS
 from .app8_graph_state import App8GraphStore
-from .app8_web_app import App8OperatorConsoleApplication
+from .app8_web_app import App8OperatorConsoleApplication, _APP8_HTML
 from .deterministic_task_execution import DeterministicApp7TaskService
 from .operator_console import OperatorConsoleService
 from .task_execution import TaskExecutionConfig
-from .web_app import make_handler
+from .web_app import AppResponse, make_handler
+
+
+class DeterministicApp8OperatorConsoleApplication(App8OperatorConsoleApplication):
+    """APP8E UI with explicit human validation-PR support for PR-triggered CI."""
+
+    def dispatch(
+        self,
+        method: str,
+        target: str,
+        *,
+        body: bytes | None = None,
+        headers: Mapping[str, str] | None = None,
+    ) -> AppResponse:
+        if method == "GET" and urlsplit(target).path == "/":
+            return AppResponse(
+                200,
+                "text/html; charset=utf-8",
+                _DETERMINISTIC_APP8_HTML.encode("utf-8"),
+            )
+        return super().dispatch(method, target, body=body, headers=headers)
 
 
 def serve_operator_console(
@@ -59,7 +81,7 @@ def serve_operator_console(
     service = OperatorConsoleService(token_env=token_env, api_base=api_base)
     task_service = DeterministicApp7TaskService(config, state_path=state_path)
     graph_store = App8GraphStore(graph_state_path)
-    application = App8OperatorConsoleApplication(
+    application = DeterministicApp8OperatorConsoleApplication(
         service,
         task_service,
         graph_store,
@@ -76,6 +98,7 @@ def serve_operator_console(
     elif application.writes_enabled:
         print("Mode: MODEL_PLANS_HOST_EXECUTES + APP2-APP7 evidence + APP8 observability.")
         print("Local model has no direct write/PR/merge tools; APP8 graph surface is read-only.")
+        print("Human-approved validation PR may trigger exact-SHA CI; merge remains unavailable.")
     else:
         print("Mode: local read/review/audit + persistent APP8 graph observability.")
     try:
@@ -84,3 +107,21 @@ def serve_operator_console(
         pass
     finally:
         server.server_close()
+
+
+def _build_deterministic_app8_html() -> str:
+    html = _APP8_HTML
+    old = '$("#openPr").disabled=s.outcome!=="VERIFIED_SUCCESS"||!!pr;'
+    new = (
+        'const validationPrReady=s.stage==="CI_PENDING"&&ci.state==="pending"&&'
+        'vals.length>0&&vals.every(v=>v.status==="PASS");'
+        '$("#openPr").disabled=!!pr||!(s.outcome==="VERIFIED_SUCCESS"||validationPrReady);'
+        '$("#openPr").textContent=validationPrReady?'
+        '"Doğrulama PR aç — insan işlemi":"PR aç — insan işlemi";'
+    )
+    if old not in html:
+        raise RuntimeError("APP8 HTML PR gate marker is missing")
+    return html.replace(old, new)
+
+
+_DETERMINISTIC_APP8_HTML = _build_deterministic_app8_html()
