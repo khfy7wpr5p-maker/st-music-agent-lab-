@@ -18,7 +18,7 @@ class OpenAICompatibleConfig:
     base_url: str
     model: str
     api_key_env: str
-    timeout_seconds: float = 120.0
+    timeout_seconds: float = 600.0
 
     def endpoint(self) -> str:
         return f"{self.base_url.rstrip('/')}/chat/completions"
