@@ -153,6 +153,13 @@ def test_compact_planner_accepts_single_json_markdown_wrapper_without_extra_mode
     assert result.plan.changes[0].content == "VALUE = 'new'\n"
 
 
+def test_compact_planner_accepts_one_bounded_fenced_json_block_with_plain_commentary() -> None:
+    payload = '{"read_paths":[]}'
+    wrapped = "Here is the JSON:\n```json\n" + payload + "\n```\nDone."
+
+    assert _normalize_compact_json_content(wrapped) == payload
+
+
 def test_compact_planner_supplies_only_missing_non_authoritative_summary() -> None:
     read = LargeFakeRead()
     plan = _valid_plan()
@@ -186,10 +193,16 @@ def test_missing_summary_repair_does_not_mask_other_schema_errors() -> None:
     assert _supply_missing_plan_summary(original) == original
 
 
-def test_compact_json_normalization_never_extracts_json_from_commentary() -> None:
-    wrapped_with_commentary = 'Here is the JSON:\n```json\n{"read_paths":[]}\n```'
+def test_compact_json_normalization_never_discards_structural_commentary() -> None:
+    wrapped = 'Context {unsafe}:\n```json\n{"read_paths":[]}\n```'
 
-    assert _normalize_compact_json_content(wrapped_with_commentary) == wrapped_with_commentary
+    assert _normalize_compact_json_content(wrapped) == wrapped
+
+
+def test_compact_json_normalization_never_accepts_multiple_fenced_blocks() -> None:
+    wrapped = '```json\n{"read_paths":[]}\n```\n```json\n{"read_paths":["x"]}\n```'
+
+    assert _normalize_compact_json_content(wrapped) == wrapped
 
 
 def test_compact_json_normalization_rejects_invalid_fenced_json() -> None:
