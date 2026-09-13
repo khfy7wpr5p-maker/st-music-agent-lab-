@@ -8,6 +8,7 @@ from st_music_agent.compact_planner import (
     CompactSmallModelPlanner,
     _compact_candidate_paths,
     _normalize_compact_json_content,
+    _supply_missing_plan_summary,
 )
 from st_music_agent.deterministic_executor import PlanValidationError
 
@@ -56,6 +57,25 @@ class LargeFakeRead:
         }
 
 
+def _valid_plan() -> dict:
+    return {
+        "repository": REPO,
+        "base_sha": BASE,
+        "feature_branch": BRANCH,
+        "changes": [
+            {
+                "path": "src/target.py",
+                "operation": "update",
+                "expected_blob_sha": BLOB,
+                "content": "VALUE = 'new'\n",
+                "commit_message": "Update target deterministically",
+            }
+        ],
+        "validation_targets": [],
+        "summary": "Update target",
+    }
+
+
 def test_compact_candidate_paths_caps_and_ranks_explicit_instruction_path() -> None:
     candidates = [
         {"path": f"src/file{index:03d}.py", "sha": BLOB, "size": 10}
@@ -75,26 +95,10 @@ def test_compact_candidate_paths_caps_and_ranks_explicit_instruction_path() -> N
 
 def test_compact_planner_keeps_two_tool_free_calls_with_small_selection_prompt() -> None:
     read = LargeFakeRead()
-    plan = {
-        "repository": REPO,
-        "base_sha": BASE,
-        "feature_branch": BRANCH,
-        "changes": [
-            {
-                "path": "src/target.py",
-                "operation": "update",
-                "expected_blob_sha": BLOB,
-                "content": "VALUE = 'new'\n",
-                "commit_message": "Update target deterministically",
-            }
-        ],
-        "validation_targets": [],
-        "summary": "Update target",
-    }
     provider = CapturingProvider(
         [
             {"role": "assistant", "content": json.dumps({"read_paths": ["src/target.py"]})},
-            {"role": "assistant", "content": json.dumps(plan)},
+            {"role": "assistant", "content": json.dumps(_valid_plan())},
         ]
     )
 
@@ -121,22 +125,7 @@ def test_compact_planner_keeps_two_tool_free_calls_with_small_selection_prompt()
 
 def test_compact_planner_accepts_single_json_markdown_wrapper_without_extra_model_calls() -> None:
     read = LargeFakeRead()
-    plan = {
-        "repository": REPO,
-        "base_sha": BASE,
-        "feature_branch": BRANCH,
-        "changes": [
-            {
-                "path": "src/target.py",
-                "operation": "update",
-                "expected_blob_sha": BLOB,
-                "content": "VALUE = 'new'\n",
-                "commit_message": "Update target deterministically",
-            }
-        ],
-        "validation_targets": [],
-        "summary": "Update target",
-    }
+    plan = _valid_plan()
     provider = CapturingProvider(
         [
             {
@@ -162,6 +151,39 @@ def test_compact_planner_accepts_single_json_markdown_wrapper_without_extra_mode
     assert len(provider.calls) == 2
     assert result.selected_paths == ("src/target.py",)
     assert result.plan.changes[0].content == "VALUE = 'new'\n"
+
+
+def test_compact_planner_supplies_only_missing_non_authoritative_summary() -> None:
+    read = LargeFakeRead()
+    plan = _valid_plan()
+    del plan["summary"]
+    provider = CapturingProvider(
+        [
+            {"role": "assistant", "content": json.dumps({"read_paths": ["src/target.py"]})},
+            {"role": "assistant", "content": json.dumps(plan)},
+        ]
+    )
+
+    result = CompactSmallModelPlanner(provider).build_plan(
+        repository=REPO,
+        base_sha=BASE,
+        feature_branch=BRANCH,
+        instruction="Update src/target.py safely",
+        read_client=read,
+    )
+
+    assert result.model_calls == 2
+    assert result.plan.summary == "Apply bounded deterministic plan"
+    assert result.plan.changes[0].path == "src/target.py"
+
+
+def test_missing_summary_repair_does_not_mask_other_schema_errors() -> None:
+    plan = _valid_plan()
+    del plan["summary"]
+    plan["unexpected"] = True
+
+    original = json.dumps(plan)
+    assert _supply_missing_plan_summary(original) == original
 
 
 def test_compact_json_normalization_never_extracts_json_from_commentary() -> None:
