@@ -122,14 +122,22 @@ class CompactSmallModelPlanner(SmallModelPlanner):
         )
 
 
-def _normalize_compact_json_content(content: Any) -> str:
-    """Normalize one bounded markdown JSON wrapper without weakening plan validation.
+def _plain_commentary_is_safe(text: str) -> bool:
+    if len(text) > _MAX_WRAPPER_COMMENTARY:
+        return False
+    if any(char in text for char in "{}[]`"):
+        return False
+    return not any(not char.isprintable() and not char.isspace() for char in text)
 
-    Small local models sometimes prepend a short phrase such as ``Here is the JSON:`` even after
-    being told to emit JSON only. The host may remove exactly one fenced JSON wrapper plus bounded
-    non-structural surrounding prose. It never searches arbitrary prose for braces, accepts multiple
-    fenced blocks, or changes the JSON payload itself. Exact schema, repository/branch binding, path,
-    SHA and mutation limits remain enforced by the authoritative planner parsers.
+
+def _normalize_compact_json_content(content: Any) -> str:
+    """Normalize one bounded JSON wrapper without weakening plan validation.
+
+    Small local models sometimes prepend or append a short phrase even after being told to emit JSON
+    only. The host may remove exactly one fenced JSON wrapper, or bounded non-structural prose around
+    exactly one raw JSON object. It never accepts multiple JSON values or discards structural content.
+    Exact schema, repository/branch binding, path, SHA and mutation limits remain enforced by the
+    authoritative planner parsers.
     """
 
     if not isinstance(content, str):
@@ -137,32 +145,47 @@ def _normalize_compact_json_content(content: Any) -> str:
 
     text = content.strip()
     matches = list(_FENCED_JSON_BLOCK.finditer(text))
-    if not matches:
-        return text
-    if len(matches) != 1:
+    if matches:
+        if len(matches) != 1:
+            return text
+        match = matches[0]
+        prefix = text[: match.start()].strip()
+        suffix = text[match.end() :].strip()
+        if not _plain_commentary_is_safe(prefix + suffix):
+            return text
+
+        inner = match.group(1).strip()
+        if not inner:
+            raise PlanValidationError("compact planner fenced JSON response is empty")
+        try:
+            value = json.loads(inner)
+        except json.JSONDecodeError as exc:
+            raise PlanValidationError("compact planner fenced response is not valid JSON") from exc
+        if not isinstance(value, dict):
+            return text
+        return inner
+
+    first_object = text.find("{")
+    if first_object < 0:
         return text
 
-    match = matches[0]
-    prefix = text[: match.start()].strip()
-    suffix = text[match.end() :].strip()
-    commentary = prefix + suffix
-
-    if len(commentary) > _MAX_WRAPPER_COMMENTARY:
-        return text
-    if any(char in commentary for char in "{}[]`"):  # never discard structural content outside the fence
-        return text
-    if any(not char.isprintable() and not char.isspace() for char in commentary):
+    prefix = text[:first_object].strip()
+    if not _plain_commentary_is_safe(prefix):
         return text
 
-    inner = match.group(1).strip()
-    if not inner:
-        raise PlanValidationError("compact planner fenced JSON response is empty")
-
+    decoder = json.JSONDecoder()
     try:
-        json.loads(inner)
-    except json.JSONDecodeError as exc:
-        raise PlanValidationError("compact planner fenced response is not valid JSON") from exc
-    return inner
+        value, consumed = decoder.raw_decode(text[first_object:])
+    except json.JSONDecodeError:
+        return text
+    if not isinstance(value, dict):
+        return text
+
+    suffix = text[first_object + consumed :].strip()
+    if not _plain_commentary_is_safe(suffix):
+        return text
+
+    return text[first_object : first_object + consumed].strip()
 
 
 def _supply_missing_plan_summary(content: str) -> str:
