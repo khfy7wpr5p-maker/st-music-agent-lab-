@@ -37,6 +37,16 @@ _PRIORITY_BASENAMES = frozenset(
         "setup.cfg",
     }
 )
+_PLAN_KEYS_WITHOUT_SUMMARY = frozenset(
+    {
+        "repository",
+        "base_sha",
+        "feature_branch",
+        "changes",
+        "validation_targets",
+    }
+)
+_DEFAULT_PLAN_SUMMARY = "Apply bounded deterministic plan"
 
 
 class CompactSmallModelPlanner(SmallModelPlanner):
@@ -46,6 +56,7 @@ class CompactSmallModelPlanner(SmallModelPlanner):
         message = super()._complete(prompt)
         content = message.get("content")
         normalized = _normalize_compact_json_content(content)
+        normalized = _supply_missing_plan_summary(normalized)
         if normalized == content:
             return message
         result = dict(message)
@@ -97,13 +108,14 @@ class CompactSmallModelPlanner(SmallModelPlanner):
         return (
             "Return one strict JSON object only. The host executes mutations; you have no write, shell, "
             "PR or merge authority. Top-level keys must be exactly: repository, base_sha, feature_branch, "
-            "changes, validation_targets, summary. Each changes item must contain exactly: path, operation, "
-            "expected_blob_sha, content, commit_message. operation is create or update. Updates may target "
-            "only paths present in read_evidence and must reuse that exact blob SHA. Creates must use a new "
-            "safe path and expected_blob_sha=null. Never target main/master, credentials, GitHub workflow or "
-            f"action control files, deploy/release/training/activation/rollback surfaces. Plan at most "
-            f"{self.max_changed_files} changes. validation_targets may be []. Do not use markdown fences or "
-            "commentary; the first non-whitespace character must be { and the last must be }.\n"
+            "changes, validation_targets, summary. summary is required and must be a short string. "
+            "Each changes item must contain exactly: path, operation, expected_blob_sha, content, "
+            "commit_message. operation is create or update. Updates may target only paths present in "
+            "read_evidence and must reuse that exact blob SHA. Creates must use a new safe path and "
+            "expected_blob_sha=null. Never target main/master, credentials, GitHub workflow or action "
+            f"control files, deploy/release/training/activation/rollback surfaces. Plan at most "
+            f"{self.max_changed_files} changes. validation_targets may be []. Do not use markdown fences "
+            "or commentary; the first non-whitespace character must be { and the last must be }.\n"
             + json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
         )
 
@@ -138,6 +150,21 @@ def _normalize_compact_json_content(content: Any) -> str:
     except json.JSONDecodeError as exc:
         raise PlanValidationError("compact planner fenced response is not valid JSON") from exc
     return inner
+
+
+def _supply_missing_plan_summary(content: str) -> str:
+    """Fill only non-authoritative summary metadata when every security-relevant plan key is present."""
+
+    try:
+        value = json.loads(content)
+    except json.JSONDecodeError:
+        return content
+
+    if not isinstance(value, dict) or frozenset(value) != _PLAN_KEYS_WITHOUT_SUMMARY:
+        return content
+
+    value["summary"] = _DEFAULT_PLAN_SUMMARY
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
 def _compact_candidate_paths(
