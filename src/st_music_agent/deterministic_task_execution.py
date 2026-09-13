@@ -5,7 +5,8 @@ from typing import Any
 
 from .app3_task_execution import App3TaskService
 from .app7_task_execution import App7TaskService
-from .deterministic_executor import DeterministicExecutionError, DeterministicExecutor, SmallModelPlanner
+from .compact_planner import CompactSmallModelPlanner
+from .deterministic_executor import DeterministicExecutionError, DeterministicExecutor
 from .policy import AutonomyDecision
 from .task_execution import TaskExecutionError, TaskRunRecord, _require_action
 from .task_state import TaskStage
@@ -76,7 +77,7 @@ class _DeterministicRunMixin:
             raise TaskExecutionError("task is not resumable from its current stage")
 
         provider = self._provider_client or self._build_provider()
-        planner = SmallModelPlanner(provider)
+        planner = CompactSmallModelPlanner(provider)
         try:
             planner_result = planner.build_plan(
                 repository=preview.repository,
