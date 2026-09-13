@@ -200,20 +200,16 @@ class StructuredCompactPlanner(CompactSmallModelPlanner):
         change: Mapping[str, Any],
         file_evidence: Sequence[Mapping[str, Any]],
     ) -> str:
-        relevant_evidence = [
-            dict(item)
-            for item in file_evidence
-            if item.get("path") == change.get("path")
-        ]
         payload = {
             "instruction": instruction,
             "change": dict(change),
-            "existing_file_evidence": relevant_evidence,
+            "selected_read_evidence": [dict(item) for item in file_evidence],
         }
         return (
             "Generate the complete UTF-8 content for exactly one planned file. Return file content only: "
             "no JSON wrapper, no explanation, no markdown fence, no path header. Follow the user task "
-            "exactly. For an update, preserve unrelated content. For a create, produce the complete new "
+            "exactly. Use selected_read_evidence when the requested file depends on existing repository "
+            "contracts. For an update, preserve unrelated content. For a create, produce the complete new "
             "file. Do not emit credentials, workflow controls, deploy/release/training/activation/rollback "
             "content.\n"
             + json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
