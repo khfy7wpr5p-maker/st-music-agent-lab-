@@ -8,6 +8,7 @@ from typing import Any
 from .deterministic_executor import PlanValidationError, SmallModelPlanner
 
 _MAX_COMPACT_CANDIDATES = 96
+_MAX_WRAPPER_COMMENTARY = 160
 _COMMON_TOKENS = frozenset(
     {
         "and",
@@ -27,6 +28,7 @@ _COMMON_TOKENS = frozenset(
     }
 )
 _TOKEN = re.compile(r"[a-z0-9][a-z0-9_.-]{1,}")
+_FENCED_JSON_BLOCK = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.IGNORECASE | re.DOTALL)
 _PRIORITY_BASENAMES = frozenset(
     {
         "readme.md",
@@ -83,7 +85,7 @@ class CompactSmallModelPlanner(SmallModelPlanner):
         return (
             "Select existing files to read before planning. Do not request tools. "
             f"Choose at most {self.max_selected_files} paths from candidate_paths. "
-            'Return JSON only: {"read_paths":["path"]}. Use [] when no read is needed. '
+            '{"read_paths":["path"]}. Return JSON only. Use [] when no read is needed. '
             "No extra fields. Do not use markdown fences or commentary; the first non-whitespace "
             "character must be { and the last must be }.\n"
             + json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
@@ -113,7 +115,7 @@ class CompactSmallModelPlanner(SmallModelPlanner):
             "commit_message. operation is create or update. Updates may target only paths present in "
             "read_evidence and must reuse that exact blob SHA. Creates must use a new safe path and "
             "expected_blob_sha=null. Never target main/master, credentials, GitHub workflow or action "
-            f"control files, deploy/release/training/activation/rollback surfaces. Plan at most "
+            "control files, deploy/release/training/activation/rollback surfaces. Plan at most "
             f"{self.max_changed_files} changes. validation_targets may be []. Do not use markdown fences "
             "or commentary; the first non-whitespace character must be { and the last must be }.\n"
             + json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
@@ -121,30 +123,41 @@ class CompactSmallModelPlanner(SmallModelPlanner):
 
 
 def _normalize_compact_json_content(content: Any) -> str:
-    """Normalize only a single markdown wrapper; never extract JSON from surrounding prose."""
+    """Normalize one bounded markdown JSON wrapper without weakening plan validation.
+
+    Small local models sometimes prepend a short phrase such as ``Here is the JSON:`` even after
+    being told to emit JSON only. The host may remove exactly one fenced JSON wrapper plus bounded
+    non-structural surrounding prose. It never searches arbitrary prose for braces, accepts multiple
+    fenced blocks, or changes the JSON payload itself. Exact schema, repository/branch binding, path,
+    SHA and mutation limits remain enforced by the authoritative planner parsers.
+    """
 
     if not isinstance(content, str):
         raise PlanValidationError("compact planner response content must be text")
 
     text = content.strip()
-    if not text.startswith("```"):
+    matches = list(_FENCED_JSON_BLOCK.finditer(text))
+    if not matches:
+        return text
+    if len(matches) != 1:
         return text
 
-    lines = text.splitlines()
-    if len(lines) < 3:
+    match = matches[0]
+    prefix = text[: match.start()].strip()
+    suffix = text[match.end() :].strip()
+    commentary = prefix + suffix
+
+    if len(commentary) > _MAX_WRAPPER_COMMENTARY:
+        return text
+    if any(char in commentary for char in "{}[]`"):  # never discard structural content outside the fence
+        return text
+    if any(not char.isprintable() and not char.isspace() for char in commentary):
         return text
 
-    opening = lines[0].strip().lower()
-    closing = lines[-1].strip()
-    if opening not in {"```", "```json"} or closing != "```":
-        return text
-
-    inner = "\n".join(lines[1:-1]).strip()
+    inner = match.group(1).strip()
     if not inner:
         raise PlanValidationError("compact planner fenced JSON response is empty")
 
-    # Validate only that the wrapper contains one JSON value. The existing planner parsers
-    # remain authoritative for exact keys, repository/branch binding, paths, SHAs and limits.
     try:
         json.loads(inner)
     except json.JSONDecodeError as exc:
