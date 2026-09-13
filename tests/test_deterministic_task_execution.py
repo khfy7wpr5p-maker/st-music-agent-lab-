@@ -140,6 +140,7 @@ class FakeMutationClient:
 class ScriptedProvider:
     profile_name = "GLM-5.1"
     feature_branch = ""
+    repository = ""
 
     def __init__(self, second_message=None) -> None:
         self.calls = []
@@ -158,7 +159,7 @@ class ScriptedProvider:
             "role": "assistant",
             "content": json.dumps(
                 {
-                    "repository": "owner/repo",
+                    "repository": self.repository,
                     "base_sha": "a" * 40,
                     "feature_branch": self.feature_branch,
                     "changes": [
@@ -203,6 +204,7 @@ def test_deterministic_app3_uses_planner_without_write_tools(tmp_path) -> None:
     service = _service(tmp_path, state, provider)
     preview = service.preview("score_restore", "Update README wording")
     provider.feature_branch = preview.feature_branch
+    provider.repository = preview.repository
 
     record = service.run(preview.task_id)
     status = service.status(preview.task_id)
@@ -234,6 +236,7 @@ def test_invalid_planner_json_fails_closed_without_write(tmp_path) -> None:
     service = _service(tmp_path, state, provider)
     preview = service.preview("score_editor", "Update README wording")
     provider.feature_branch = preview.feature_branch
+    provider.repository = preview.repository
 
     with pytest.raises(TaskExecutionError, match="deterministic planner failed"):
         service.run(preview.task_id)
@@ -250,6 +253,7 @@ def test_stale_planner_blob_fails_closed_before_mutation(tmp_path) -> None:
     service = _service(tmp_path, state, provider)
     preview = service.preview("score_restore", "Update README wording")
     provider.feature_branch = preview.feature_branch
+    provider.repository = preview.repository
 
     original_complete = provider.complete_with_tools
 
@@ -277,6 +281,7 @@ def test_empty_plan_is_bounded_failure_without_retry_or_write(tmp_path) -> None:
     service = _service(tmp_path, state, provider)
     preview = service.preview("score_restore", "Inspect only")
     provider.feature_branch = preview.feature_branch
+    provider.repository = preview.repository
 
     original_complete = provider.complete_with_tools
 
