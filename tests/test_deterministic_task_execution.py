@@ -139,12 +139,11 @@ class FakeMutationClient:
 
 class ScriptedProvider:
     profile_name = "GLM-5.1"
-    feature_branch = ""
-    repository = ""
 
-    def __init__(self, second_message=None) -> None:
+    def __init__(self, second_message=None, third_message=None) -> None:
         self.calls = []
         self.second_message = second_message
+        self.third_message = third_message
 
     def complete_with_tools(self, messages, tools):
         self.calls.append((messages, tools))
@@ -153,31 +152,31 @@ class ScriptedProvider:
                 "role": "assistant",
                 "content": json.dumps({"read_paths": ["README.md"]}),
             }
-        if self.second_message is not None:
-            return self.second_message
-        return {
-            "role": "assistant",
-            "content": json.dumps(
-                {
-                    "repository": self.repository,
-                    "base_sha": "a" * 40,
-                    "feature_branch": self.feature_branch,
-                    "changes": [
-                        {
-                            "path": "README.md",
-                            "operation": "update",
-                            "expected_blob_sha": "c" * 40,
-                            "content": "after\n",
-                            "commit_message": "Update README deterministically",
-                        }
-                    ],
-                    "validation_targets": [
-                        "python -m pytest -q tests/test_deterministic_task_execution.py"
-                    ],
-                    "summary": "Update README with host-side deterministic execution",
-                }
-            ),
-        }
+        if len(self.calls) == 2:
+            if self.second_message is not None:
+                return self.second_message
+            return {
+                "role": "assistant",
+                "content": json.dumps(
+                    {
+                        "changes": [
+                            {
+                                "path": "README.md",
+                                "operation": "update",
+                                "expected_blob_sha": "c" * 40,
+                                "commit_message": "Update README deterministically",
+                            }
+                        ],
+                        "validation_targets": [
+                            "python -m pytest -q tests/test_deterministic_task_execution.py"
+                        ],
+                        "summary": "Update README with host-side deterministic execution",
+                    }
+                ),
+            }
+        if self.third_message is not None:
+            return self.third_message
+        return {"role": "assistant", "content": "after\n"}
 
 
 def _service(tmp_path, state, provider):
@@ -203,14 +202,12 @@ def test_deterministic_app3_uses_planner_without_write_tools(tmp_path) -> None:
     provider = ScriptedProvider()
     service = _service(tmp_path, state, provider)
     preview = service.preview("score_restore", "Update README wording")
-    provider.feature_branch = preview.feature_branch
-    provider.repository = preview.repository
 
     record = service.run(preview.task_id)
     status = service.status(preview.task_id)
 
     assert record.head_sha == "b" * 40
-    assert record.turns == 2
+    assert record.turns == 3
     assert record.tool_calls == 0
     assert status["stage"] == "CI_PENDING"
     assert status["commit"]["execution_mode"] == "MODEL_PLANS_HOST_EXECUTES"
@@ -223,7 +220,7 @@ def test_deterministic_app3_uses_planner_without_write_tools(tmp_path) -> None:
             "sha": "c" * 40,
         }
     ]
-    assert len(provider.calls) == 2
+    assert len(provider.calls) == 3
     assert all(tools == [] for _, tools in provider.calls)
     events = service.store.task_events(preview.task_id)
     assert any(item["event"] == "PLAN_VALIDATED" for item in events)
@@ -235,8 +232,6 @@ def test_invalid_planner_json_fails_closed_without_write(tmp_path) -> None:
     provider = ScriptedProvider({"role": "assistant", "content": "not-json"})
     service = _service(tmp_path, state, provider)
     preview = service.preview("score_editor", "Update README wording")
-    provider.feature_branch = preview.feature_branch
-    provider.repository = preview.repository
 
     with pytest.raises(TaskExecutionError, match="deterministic planner failed"):
         service.run(preview.task_id)
@@ -252,8 +247,6 @@ def test_stale_planner_blob_fails_closed_before_mutation(tmp_path) -> None:
     provider = ScriptedProvider()
     service = _service(tmp_path, state, provider)
     preview = service.preview("score_restore", "Update README wording")
-    provider.feature_branch = preview.feature_branch
-    provider.repository = preview.repository
 
     original_complete = provider.complete_with_tools
 
@@ -275,13 +268,11 @@ def test_stale_planner_blob_fails_closed_before_mutation(tmp_path) -> None:
     assert status["stage"] == "FAILED"
 
 
-def test_empty_plan_is_bounded_failure_without_retry_or_write(tmp_path) -> None:
+def test_empty_manifest_is_bounded_failure_without_retry_or_write(tmp_path) -> None:
     state = RepoState()
     provider = ScriptedProvider()
     service = _service(tmp_path, state, provider)
     preview = service.preview("score_restore", "Inspect only")
-    provider.feature_branch = preview.feature_branch
-    provider.repository = preview.repository
 
     original_complete = provider.complete_with_tools
 
@@ -296,7 +287,7 @@ def test_empty_plan_is_bounded_failure_without_retry_or_write(tmp_path) -> None:
 
     provider.complete_with_tools = empty_complete
 
-    with pytest.raises(TaskExecutionError, match="plan contains no file changes"):
+    with pytest.raises(TaskExecutionError, match="structured planner manifest must contain file changes"):
         service.run(preview.task_id)
 
     assert len(provider.calls) == 2
