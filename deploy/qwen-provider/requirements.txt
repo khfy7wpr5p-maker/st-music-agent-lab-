@@ -1,0 +1,6 @@
+fastapi>=0.115
+uvicorn>=0.34
+torch>=2.6
+transformers>=4.51
+accelerate>=1.2
+bitsandbytes>=0.45
