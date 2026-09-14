@@ -81,7 +81,7 @@ The wrapper `scripts/run-persistent-qwen-agent.sh` consumes the generic environm
 export ST_QWEN_BASE_URL=https://qwen.example.com/v1
 export ST_QWEN_API_KEY='...'
 export GITHUB_TOKEN='...'
-./scripts/run-persistent-qwen-agent.sh
+bash scripts/run-persistent-qwen-agent.sh
 ```
 
 ## Migration from Colab
